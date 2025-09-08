@@ -1,0 +1,20 @@
+{
+  "name": "arena-club",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm:dev -w apps/api\" \"npm:dev -w apps/web\"",
+    "build": "npm --workspace apps/web run build && npm --workspace apps/api run build",
+    "start": "npm --workspace apps/api run start",
+    "prisma:reset": "npm --workspace apps/api run prisma:reset",
+    "lint": "npm -w apps/web run lint && npm -w apps/api run lint",
+    "format": "npm -w apps/web run format && npm -w apps/api run format"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
+
+

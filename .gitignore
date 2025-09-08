@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+.DS_Store
+*.log
+apps/api/uploads/
+apps/api/prisma/app.db
+apps/web/dist/
+

@@ -1,0 +1,18 @@
+:root {
+  --primary: #FF3B3B;
+  --primary2: #FF6A3D;
+  --bg: #111318;
+  --panel: #1E222B;
+  --text: #E6EDF3;
+}
+
+.btn {
+  @apply px-3 py-2 rounded bg-[var(--primary)] text-white hover:opacity-90 transition;
+}
+
+.card {
+  @apply bg-[var(--panel)] rounded border border-neutral-800;
+}
+
+
+

@@ -1,0 +1,87 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./app.db"
+}
+
+// SQLite не поддерживает native enum — используем строки
+
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  username     String?  @unique
+  passwordHash String
+  role         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  sales        Sale[]
+  movements    StockMovement[]
+}
+
+model Category {
+  id    Int      @id @default(autoincrement())
+  name  String   @unique
+  products Product[]
+}
+
+model Product {
+  id        Int       @id @default(autoincrement())
+  name      String
+  sku       String    @unique
+  categoryId Int?
+  category  Category? @relation(fields: [categoryId], references: [id])
+  price     Decimal
+  costPrice Decimal   @default(0)
+  imageUrl  String?
+  stock     Int       @default(0)
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  saleItems SaleItem[]
+  movements StockMovement[]
+
+  @@index([sku])
+}
+
+model StockMovement {
+  id        Int       @id @default(autoincrement())
+  productId Int
+  product   Product   @relation(fields: [productId], references: [id])
+  type      String
+  quantity  Int
+  unitPrice Decimal?
+  note      String?
+  userId    Int
+  user      User      @relation(fields: [userId], references: [id])
+  createdAt DateTime  @default(now())
+
+  @@index([productId, createdAt])
+}
+
+model Sale {
+  id            Int        @id @default(autoincrement())
+  userId        Int
+  user          User       @relation(fields: [userId], references: [id])
+  total         Decimal
+  discount      Decimal?
+  paymentMethod String?
+  createdAt     DateTime   @default(now())
+  items         SaleItem[]
+
+  @@index([createdAt])
+}
+
+model SaleItem {
+  id         Int      @id @default(autoincrement())
+  saleId     Int
+  sale       Sale     @relation(fields: [saleId], references: [id])
+  productId  Int
+  product    Product  @relation(fields: [productId], references: [id])
+  quantity   Int
+  unitPrice  Decimal
+}
+
+
