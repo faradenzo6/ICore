@@ -30,6 +30,42 @@ export default function ReportsPage() {
   }
 
   useEffect(() => { load(); }, [bucket]);
+  useEffect(() => {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    const todayStr = `${yyyy}-${mm}-${dd}`;
+    if (!from) setFrom(todayStr);
+    if (!to) setTo(todayStr);
+  }, []);
+
+  useEffect(() => {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const todayStr = `${yyyy}-${mm}-${dd}`;
+    if (bucket === 'day') {
+      setFrom(todayStr); setTo(todayStr);
+    } else if (bucket === 'week') {
+      const d = new Date(now);
+      const day = d.getDay(); // 0-вс ... 1-пн
+      const diffToMonday = (day + 6) % 7; // сдвиг до понедельника
+      d.setDate(d.getDate() - diffToMonday);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const dayStr = String(d.getDate()).padStart(2, '0');
+      setFrom(`${y}-${m}-${dayStr}`);
+      setTo(todayStr);
+    } else if (bucket === 'month') {
+      const first = `${yyyy}-${mm}-01`;
+      setFrom(first); setTo(todayStr);
+    } else if (bucket === 'year') {
+      const first = `${yyyy}-01-01`;
+      setFrom(first); setTo(todayStr);
+    }
+  }, [bucket]);
   useEffect(() => { (async () => { const cats = await apiFetch<Category[]>('/api/categories'); setCategories(cats); })(); }, []);
 
   function exportStockCsv() { window.open('/api/reports/stock-export.csv', '_blank'); }

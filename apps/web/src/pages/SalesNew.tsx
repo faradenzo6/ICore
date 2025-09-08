@@ -64,8 +64,14 @@ export default function SalesNew() {
     <div className="p-6 space-y-4">
       <h1 className="text-2xl font-semibold">Новая продажа</h1>
       <div className="flex gap-3 items-start">
-        <div className="relative w-full max-w-xl">
-          <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { addByName(query); setQuery(''); setSuggestions([]); } }} placeholder="Поиск" className="p-2 rounded bg-[#11161f] border border-neutral-700 w-full" />
+        <div className="relative w-full max-w-xl" onBlur={(e) => {
+          // Закрыть подсказки при клике вне (задержка чтобы клик по элементу успел обработаться)
+          setTimeout(() => setSuggestions([]), 100);
+        }}>
+          <input autoFocus value={query} onFocus={async () => {
+            const res = await apiFetch<{ items: Product[]; total: number; page: number; limit: number }>(`/api/products?limit=5`);
+            setSuggestions(res.items);
+          }} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { addByName(query); setQuery(''); setSuggestions([]); } }} placeholder="Поиск товара" className="p-2 rounded bg-[#11161f] border border-neutral-700 w-full" />
           {suggestions.length > 0 && (
             <div className="absolute z-10 mt-1 w-full max-h-60 overflow-auto bg-[#1E222B] border border-neutral-700 rounded">
               {suggestions.map((p) => (

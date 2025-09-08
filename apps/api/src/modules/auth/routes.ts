@@ -19,10 +19,11 @@ router.post('/login', loginLimiter, async (req, res) => {
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) return res.status(422).json({ message: 'Некорректные данные' });
   const { login, password } = parsed.data;
-  let user = await prisma.user.findFirst({ where: { OR: [{ email: login }, { username: login }] } });
+  const normalized = login.toLowerCase();
+  let user = await prisma.user.findFirst({ where: { OR: [{ email: normalized }, { username: normalized }] } });
   // Fallback: если введён короткий логин без домена, пробуем email вида login@local
-  if (!user && !login.includes('@')) {
-    user = await prisma.user.findUnique({ where: { email: `${login}@local` } });
+  if (!user && !normalized.includes('@')) {
+    user = await prisma.user.findUnique({ where: { email: `${normalized}@local` } });
   }
   if (!user) return res.status(401).json({ message: 'Неверный логин или пароль' });
   const ok = await bcrypt.compare(password, user.passwordHash);

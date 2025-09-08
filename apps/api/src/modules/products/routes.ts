@@ -7,9 +7,9 @@ export const router = Router();
 
 const productSchema = z.object({
   name: z.string().min(1),
-  sku: z.string().min(1),
+  sku: z.string().min(1).optional(),
   categoryId: z.number().int().optional().nullable(),
-  price: z.number().nonnegative(),
+  price: z.number().nonnegative().optional(),
   costPrice: z.number().nonnegative().optional(),
   imageUrl: z.string().url().optional().nullable(),
   stock: z.number().int().nonnegative().optional(),
@@ -47,11 +47,25 @@ router.post('/', authGuard, requireRole('ADMIN'), async (req, res) => {
   const parsed = productSchema.safeParse(req.body);
   if (!parsed.success) return res.status(422).json({ message: 'Валидация не пройдена' });
   const data = parsed.data;
+  // auto SKU if not provided
+  let sku = data.sku;
+  if (!sku) {
+    const base = data.name
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '')
+      .slice(0, 8) || 'ITEM';
+    sku = base;
+    let i = 1;
+    while (await prisma.product.findUnique({ where: { sku } })) {
+      sku = `${base}${(++i).toString().padStart(2, '0')}`;
+    }
+  }
   const created = await prisma.product.create({ data: {
     name: data.name,
-    sku: data.sku,
+    sku,
     categoryId: data.categoryId ?? undefined,
-    price: data.price,
+    price: data.price ?? 0,
     costPrice: data.costPrice ?? 0,
     imageUrl: data.imageUrl ?? undefined,
     stock: data.stock ?? 0,

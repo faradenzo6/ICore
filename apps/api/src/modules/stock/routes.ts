@@ -8,7 +8,8 @@ export const router = Router();
 const inSchema = z.object({
   productId: z.number().int(),
   quantity: z.number().int().positive(),
-  unitPrice: z.number().nonnegative().optional(),
+  unitPrice: z.number().nonnegative().optional(), // закупочная (себестоимость)
+  salePrice: z.number().nonnegative().optional(), // цена продажи
   note: z.string().optional(),
 });
 
@@ -21,14 +22,18 @@ const outSchema = z.object({
 router.post('/in', authGuard, requireRole('ADMIN', 'STAFF_MANAGER'), async (req, res) => {
   const parsed = inSchema.safeParse(req.body);
   if (!parsed.success) return res.status(422).json({ message: 'Валидация не пройдена' });
-  const { productId, quantity, unitPrice, note } = parsed.data;
+  const { productId, quantity, unitPrice, salePrice, note } = parsed.data;
 
   const userId = req.user!.userId;
 
   const result = await prisma.$transaction(async (tx) => {
     const product = await tx.product.update({
       where: { id: productId },
-      data: { stock: { increment: quantity } },
+      data: {
+        stock: { increment: quantity },
+        ...(unitPrice !== undefined ? { costPrice: unitPrice } : {}),
+        ...(salePrice !== undefined ? { price: salePrice } : {}),
+      },
     });
     await tx.stockMovement.create({
       data: {

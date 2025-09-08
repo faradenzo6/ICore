@@ -5,7 +5,6 @@ type User = { id: number; email: string; username?: string; role: 'ADMIN'|'STAFF
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
-  const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<User['role']>('STAFF');
@@ -18,8 +17,8 @@ export default function UsersPage() {
   useEffect(() => { load(); }, []);
 
   async function createUser() {
-    await apiFetch('/api/users', { method: 'POST', body: JSON.stringify({ email, username, password, role }) });
-    setEmail(''); setUsername(''); setPassword(''); setRole('STAFF');
+    await apiFetch('/api/users', { method: 'POST', body: JSON.stringify({ username, password, role }) });
+    setUsername(''); setPassword(''); setRole('STAFF');
     await load();
   }
 
@@ -45,13 +44,12 @@ export default function UsersPage() {
     <div className="p-6 space-y-4">
       <h1 className="text-2xl font-semibold">Пользователи</h1>
       <div className="card p-4 grid gap-2 md:grid-cols-4">
-        <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="p-2 rounded bg-[#11161f] border border-neutral-700" />
         <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Логин" className="p-2 rounded bg-[#11161f] border border-neutral-700" />
         <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Пароль" className="p-2 rounded bg-[#11161f] border border-neutral-700" />
         <select value={role} onChange={(e) => setRole(e.target.value as User['role'])} className="p-2 rounded bg-[#11161f] border border-neutral-700">
-          <option value="ADMIN">ADMIN</option>
-          <option value="STAFF_MANAGER">STAFF_MANAGER</option>
-          <option value="STAFF">STAFF</option>
+          <option value="ADMIN">Администратор</option>
+          <option value="STAFF_MANAGER">Менеджер смены</option>
+          <option value="STAFF">Сотрудник</option>
         </select>
         <button className="btn" onClick={createUser}>Создать</button>
       </div>
@@ -71,9 +69,9 @@ export default function UsersPage() {
                 <td className="p-2">{u.email}{u.username ? ` (${u.username})` : ''}</td>
                 <td className="p-2">
                   <select value={u.role} onChange={(e) => updateRole(u.id, e.target.value as User['role'])} className="p-1 rounded bg-[#11161f] border border-neutral-700">
-                    <option value="ADMIN">ADMIN</option>
-                    <option value="STAFF_MANAGER">STAFF_MANAGER</option>
-                    <option value="STAFF">STAFF</option>
+                    <option value="ADMIN">Администратор</option>
+                    <option value="STAFF_MANAGER">Менеджер смены</option>
+                    <option value="STAFF">Сотрудник</option>
                   </select>
                 </td>
                 <td className="p-2 flex gap-2">

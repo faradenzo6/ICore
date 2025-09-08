@@ -1,15 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../lib/api';
 
-type Product = { id: number; name: string; sku: string };
+type Product = { id: number; name: string; sku: string; stock?: number };
 type Movement = { id: number; product: Product; type: string; quantity: number; unitPrice?: number|null; note?: string|null; createdAt: string };
 
 export default function StockPage() {
   const [query, setQuery] = useState('');
   const [product, setProduct] = useState<Product | null>(null);
+  const [suggestions, setSuggestions] = useState<Product[]>([]);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [qtyIn, setQtyIn] = useState(1);
   const [priceIn, setPriceIn] = useState<number | ''>('');
-  const [qtyOut, setQtyOut] = useState(1);
+  const [salePrice, setSalePrice] = useState<number | ''>('');
+  // OUT убираем
   const [note, setNote] = useState('');
 
   const [movements, setMovements] = useState<Movement[]>([]);
@@ -18,24 +21,19 @@ export default function StockPage() {
   const [type, setType] = useState('');
 
   async function findProduct() {
-    const res = await apiFetch<{ items: Product[]; total: number; page: number; limit: number }>(`/api/products?search=${encodeURIComponent(query)}&limit=1`);
+    const res = await apiFetch<{ items: Product[]; total: number; page: number; limit: number }>(`/api/products?search=${encodeURIComponent(query)}&limit=5`);
+    setSuggestions(res.items);
     setProduct(res.items[0] || null);
-    if (!res.items[0]) alert('Не найдено');
   }
 
   async function doIn() {
     if (!product) return;
-    await apiFetch('/api/stock/in', { method: 'POST', body: JSON.stringify({ productId: product.id, quantity: qtyIn, unitPrice: priceIn || undefined, note: note || undefined }) });
+    await apiFetch('/api/stock/in', { method: 'POST', body: JSON.stringify({ productId: product.id, quantity: qtyIn, unitPrice: priceIn || undefined, salePrice: salePrice || undefined, note: note || undefined }) });
     alert('Поступление добавлено');
     loadMovements();
   }
 
-  async function doOut() {
-    if (!product) return;
-    await apiFetch('/api/stock/out', { method: 'POST', body: JSON.stringify({ productId: product.id, quantity: qtyOut, note: note || undefined }) });
-    alert('Списание добавлено');
-    loadMovements();
-  }
+  // Списание отключено по требованиям
 
   async function loadMovements() {
     const qs = new URLSearchParams();
@@ -47,18 +45,33 @@ export default function StockPage() {
   }
 
   useEffect(() => { loadMovements(); }, []);
+  useEffect(() => {
+    // Загрузить все товары со склада
+    apiFetch<{ items: Product[]; total: number; page: number; limit: number }>(`/api/products?page=1&limit=1000`).then((r) => {
+      setAllProducts(r.items);
+    });
+  }, []);
 
   return (
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-semibold">Склад</h1>
 
-      <div className="card p-4 grid gap-3 md:grid-cols-5 items-end">
-        <div className="md:col-span-2">
+      <div className="card p-4 grid gap-3 md:grid-cols-6 items-end">
+        <div className="md:col-span-2 relative" onBlur={() => setTimeout(() => setSuggestions([]), 100)}>
           <label className="block text-sm text-neutral-400 mb-1">Поиск товара (SKU/название)</label>
           <div className="flex gap-2">
-            <input value={query} onChange={(e) => setQuery(e.target.value)} className="w-full p-2 rounded bg-[#11161f] border border-neutral-700" />
+            <input value={query} onChange={async (e) => { setQuery(e.target.value); if (e.target.value.trim()) { const res = await apiFetch<{ items: Product[]; total: number; page: number; limit: number }>(`/api/products?search=${encodeURIComponent(e.target.value)}&limit=5`); setSuggestions(res.items); } else { setSuggestions([]); } }} onFocus={findProduct} placeholder="Введите название или SKU" className="w-full p-2 rounded bg-[#11161f] border border-neutral-700" />
             <button className="btn" onClick={findProduct}>Найти</button>
           </div>
+          {suggestions.length > 0 && (
+            <div className="absolute z-10 mt-1 w-full max-h-60 overflow-auto bg-[#1E222B] border border-neutral-700 rounded">
+              {suggestions.map((p) => (
+                <div key={p.id} className="px-3 py-2 hover:bg-[#2a2f3a] cursor-pointer" onClick={() => { setProduct(p); setQuery(`${p.name}`); setSuggestions([]); }}>
+                  {p.name} <span className="text-neutral-400">({p.sku})</span>
+                </div>
+              ))}
+            </div>
+          )}
           {product && <div className="text-sm text-neutral-300 mt-1">Выбран: {product.name} ({product.sku})</div>}
         </div>
         <div>
@@ -66,26 +79,48 @@ export default function StockPage() {
           <input type="number" value={qtyIn} onChange={(e) => setQtyIn(Math.max(1, Number(e.target.value)))} className="w-full p-2 rounded bg-[#11161f] border border-neutral-700" />
         </div>
         <div>
-          <label className="block text-sm text-neutral-400 mb-1">Поступление: цена за единицу</label>
+          <label className="block text-sm text-neutral-400 mb-1">Поступление: цена закупки</label>
           <input type="number" value={priceIn} onChange={(e) => setPriceIn(e.target.value ? Number(e.target.value) : '')} className="w-full p-2 rounded bg-[#11161f] border border-neutral-700" />
         </div>
         <div>
-          <button className="btn w-full" onClick={doIn} disabled={!product}>Добавить IN</button>
+          <label className="block text-sm text-neutral-400 mb-1">Цена продажи</label>
+          <input type="number" value={salePrice} onChange={(e) => setSalePrice(e.target.value ? Number(e.target.value) : '')} className="w-full p-2 rounded bg-[#11161f] border border-neutral-700" />
         </div>
         <div>
-          <label className="block text-sm text-neutral-400 mb-1">Списание: кол-во</label>
-          <input type="number" value={qtyOut} onChange={(e) => setQtyOut(Math.max(1, Number(e.target.value)))} className="w-full p-2 rounded bg-[#11161f] border border-neutral-700" />
+          <button className="btn w-full" onClick={doIn} disabled={!product}>Добавить</button>
         </div>
+        {/* Блок списания удалён */}
         <div className="md:col-span-2">
           <label className="block text-sm text-neutral-400 mb-1">Примечание</label>
           <input value={note} onChange={(e) => setNote(e.target.value)} className="w-full p-2 rounded bg-[#11161f] border border-neutral-700" />
         </div>
-        <div>
-          <button className="btn w-full" onClick={doOut} disabled={!product}>Добавить OUT</button>
-        </div>
+        {/* Кнопка списания удалена */}
       </div>
 
       <div className="card p-4 space-y-3">
+        <div>
+          <div className="font-medium mb-2">Товары на складе</div>
+          <div className="overflow-auto max-h-64 border border-neutral-800 rounded">
+            <table className="min-w-full text-sm">
+              <thead className="bg-[#121822] text-neutral-300 sticky top-0 z-10">
+                <tr>
+                  <th className="text-left p-2">Название</th>
+                  <th className="text-left p-2">SKU</th>
+                  <th className="text-left p-2">Остаток</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allProducts.map((p) => (
+                  <tr key={p.id} className="border-t border-neutral-800">
+                    <td className="p-2">{p.name}</td>
+                    <td className="p-2">{p.sku}</td>
+                    <td className="p-2">{typeof p.stock === 'number' ? p.stock : ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
         <div className="flex flex-wrap gap-2 items-end">
           <div>
             <label className="block text-sm text-neutral-400 mb-1">От</label>
@@ -96,12 +131,12 @@ export default function StockPage() {
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="p-2 rounded bg-[#11161f] border border-neutral-700" />
           </div>
           <div>
-            <label className="block text-sm text-neutral-400 mb-1">Тип</label>
+            <label className="block text-sm text-neutral-400 mb-1">Операция</label>
             <select value={type} onChange={(e) => setType(e.target.value)} className="p-2 rounded bg-[#11161f] border border-neutral-700">
               <option value="">Все</option>
-              <option value="IN">IN</option>
-              <option value="OUT">OUT</option>
-              <option value="ADJUST">ADJUST</option>
+              <option value="IN">Поступление</option>
+              <option value="OUT">Списание</option>
+              <option value="ADJUST">Корректировка</option>
             </select>
           </div>
           <button className="btn" onClick={loadMovements}>Показать</button>
@@ -110,11 +145,11 @@ export default function StockPage() {
 
         <div className="overflow-auto">
           <table className="min-w-full text-sm">
-            <thead className="text-neutral-400">
+            <thead className="bg-[#121822] text-neutral-300 sticky top-0 z-10">
               <tr>
                 <th className="text-left p-2">Дата</th>
                 <th className="text-left p-2">Товар</th>
-                <th className="text-left p-2">Тип</th>
+                <th className="text-left p-2">Операция</th>
                 <th className="text-left p-2">Кол-во</th>
                 <th className="text-left p-2">Цена</th>
                 <th className="text-left p-2">Примечание</th>
@@ -125,7 +160,7 @@ export default function StockPage() {
                 <tr key={m.id} className="border-t border-neutral-800">
                   <td className="p-2">{new Date(m.createdAt).toLocaleString('ru-RU')}</td>
                   <td className="p-2">{m.product.name}</td>
-                  <td className="p-2">{m.type}</td>
+                  <td className="p-2">{m.type === 'IN' ? 'Поступление' : m.type === 'OUT' ? 'Списание' : 'Корректировка'}</td>
                   <td className="p-2">{m.quantity}</td>
                   <td className="p-2">{m.unitPrice ?? ''}</td>
                   <td className="p-2">{m.note ?? ''}</td>

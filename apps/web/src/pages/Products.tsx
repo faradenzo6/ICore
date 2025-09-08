@@ -3,7 +3,7 @@ import { apiFetch, getMe, User } from '../lib/api';
 import { toast } from 'sonner';
 
 type Category = { id: number; name: string };
-type Product = { id: number; name: string; sku: string; categoryId: number|null; price: number; costPrice?: number; stock: number; isActive: boolean };
+type Product = { id: number; name: string; sku: string; categoryId: number|null; price: number; costPrice?: number; stock: number; isActive: boolean; category?: { id: number; name: string } };
 
 export default function Products() {
   const [me, setMe] = useState<User | null>(null);
@@ -37,6 +37,7 @@ export default function Products() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Товары</h1>
         {canCreate && <CreateProduct onCreated={() => setPage(1)} categories={categories} />}
+        {canCreate && <ManageCategories />}
       </div>
       <div className="flex gap-2 items-center">
         <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="Поиск по названию или SKU" className="p-2 rounded bg-[#11161f] border border-neutral-700 w-80" />
@@ -64,9 +65,7 @@ export default function Products() {
               <th className="text-left p-2">#</th>
               <th className="text-left p-2">Название</th>
               <th className="text-left p-2">SKU</th>
-              <th className="text-left p-2">Цена</th>
-              <th className="text-left p-2">Себестоимость</th>
-              <th className="text-left p-2">Остаток</th>
+              <th className="text-left p-2">Категория</th>
               <th className="text-left p-2">Статус</th>
               {canCreate && <th className="text-left p-2">Действия</th>}
             </tr>
@@ -77,9 +76,7 @@ export default function Products() {
                 <td className="p-2">{p.id}</td>
                 <td className="p-2">{p.name}</td>
                 <td className="p-2">{p.sku}</td>
-                <td className="p-2">{formatUZS(p.price)}</td>
-                <td className="p-2">{formatUZS(p.costPrice ?? 0)}</td>
-                <td className="p-2">{p.stock}</td>
+                <td className="p-2">{p.category?.name || ''}</td>
                 <td className="p-2">{p.isActive ? 'Активен' : 'Скрыт'}</td>
                 {canCreate && (
                   <td className="p-2 space-x-2">
@@ -127,23 +124,20 @@ function formatUZS(value: number) {
 function CreateProduct({ categories, onCreated }: { categories: Category[]; onCreated: () => void }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
-  const [sku, setSku] = useState('');
   const [categoryId, setCategoryId] = useState<number | ''>('');
-  const [price, setPrice] = useState<number>(0);
-  const [costPrice, setCostPrice] = useState<number>(0);
   const [loading, setLoading] = useState(false);
 
-  const canSubmit = useMemo(() => name && sku && price > 0, [name, sku, price]);
+  const canSubmit = useMemo(() => Boolean(name), [name]);
 
   async function submit() {
     setLoading(true);
     try {
       await apiFetch('/api/products', {
         method: 'POST',
-        body: JSON.stringify({ name, sku, categoryId: categoryId || undefined, price, costPrice, stock: 0, isActive: true }),
+        body: JSON.stringify({ name, categoryId: categoryId || undefined, isActive: true }),
       });
       setOpen(false);
-      setName(''); setSku(''); setCategoryId(''); setPrice(0); setCostPrice(0);
+      setName(''); setCategoryId('');
       onCreated();
     } catch (e) {
       alert('Ошибка: ' + (e as Error).message);
@@ -164,13 +158,12 @@ function CreateProduct({ categories, onCreated }: { categories: Category[]; onCr
             </div>
             <div className="space-y-2">
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Название" className="w-full p-2 rounded bg-[#11161f] border border-neutral-700" />
-              <input value={sku} onChange={(e) => setSku(e.target.value)} placeholder="SKU" className="w-full p-2 rounded bg-[#11161f] border border-neutral-700" />
+              {/* SKU генерируется автоматически на бэкенде */}
               <select value={categoryId} onChange={(e) => setCategoryId(e.target.value ? Number(e.target.value) : '')} className="w-full p-2 rounded bg-[#11161f] border border-neutral-700">
                 <option value="">Без категории</option>
                 {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
-              <input type="number" value={price} onChange={(e) => setPrice(Number(e.target.value))} placeholder="Цена продажи" className="w-full p-2 rounded bg-[#11161f] border border-neutral-700" />
-              <input type="number" value={costPrice} onChange={(e) => setCostPrice(Number(e.target.value))} placeholder="Себестоимость" className="w-full p-2 rounded bg-[#11161f] border border-neutral-700" />
+              {/* Цены управляются через раздел Склад */}
               <div className="flex gap-2 justify-end">
                 <button className="btn" disabled={!canSubmit || loading} onClick={submit}>{loading ? '...' : 'Создать'}</button>
               </div>
@@ -187,19 +180,17 @@ function EditProduct({ product, categories, onUpdated }: { product: Product; cat
   const [name, setName] = useState(product.name);
   const [sku, setSku] = useState(product.sku);
   const [categoryId, setCategoryId] = useState<number | ''>(product.categoryId ?? '');
-  const [price, setPrice] = useState<number>(product.price);
-  const [costPrice, setCostPrice] = useState<number>(product.costPrice ?? 0);
   const [isActive, setIsActive] = useState<boolean>(product.isActive);
   const [loading, setLoading] = useState(false);
 
-  const canSubmit = useMemo(() => name && sku && price > 0, [name, sku, price]);
+  const canSubmit = useMemo(() => Boolean(name && sku), [name, sku]);
 
   async function submit() {
     setLoading(true);
     try {
       await apiFetch(`/api/products/${product.id}`, {
         method: 'PUT',
-        body: JSON.stringify({ name, sku, categoryId: categoryId || null, price, costPrice, isActive }),
+        body: JSON.stringify({ name, sku, categoryId: categoryId || null, isActive }),
       });
       setOpen(false);
       onUpdated();
@@ -227,14 +218,67 @@ function EditProduct({ product, categories, onUpdated }: { product: Product; cat
                 <option value="">Без категории</option>
                 {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
-              <input type="number" value={price} onChange={(e) => setPrice(Number(e.target.value))} placeholder="Цена продажи" className="w-full p-2 rounded bg-[#11161f] border border-neutral-700" />
-              <input type="number" value={costPrice} onChange={(e) => setCostPrice(Number(e.target.value))} placeholder="Себестоимость" className="w-full p-2 rounded bg-[#11161f] border border-neutral-700" />
+              {/* Цены управляются через раздел Склад */}
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
                 Активен
               </label>
               <div className="flex gap-2 justify-end">
                 <button className="btn" disabled={!canSubmit || loading} onClick={submit}>{loading ? '...' : 'Сохранить'}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function ManageCategories() {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [items, setItems] = useState<{ id: number; name: string }[]>([]);
+
+  async function load() {
+    const data = await apiFetch<{ id: number; name: string }[]>('/api/categories');
+    setItems(data);
+  }
+
+  async function add() {
+    if (!name.trim()) return;
+    await apiFetch('/api/categories', { method: 'POST', body: JSON.stringify({ name }) });
+    setName('');
+    await load();
+  }
+
+  async function remove(id: number) {
+    if (!confirm('Удалить категорию?')) return;
+    await apiFetch(`/api/categories/${id}`, { method: 'DELETE' });
+    await load();
+  }
+
+  return (
+    <>
+      <button className="btn" onClick={() => { setOpen(true); load(); }}>Категории</button>
+      {open && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="card p-4 w-full max-w-md">
+            <div className="flex items-center justify-between mb-3">
+              <div className="font-semibold">Категории</div>
+              <button onClick={() => setOpen(false)} className="text-neutral-300">✕</button>
+            </div>
+            <div className="space-y-3">
+              <div className="flex gap-2">
+                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Название категории" className="flex-1 p-2 rounded bg-[#11161f] border border-neutral-700" />
+                <button className="btn" onClick={add}>Добавить</button>
+              </div>
+              <div className="max-h-64 overflow-auto border border-neutral-800 rounded">
+                {items.map((c) => (
+                  <div key={c.id} className="flex items-center justify-between px-3 py-2 border-b border-neutral-800">
+                    <div>{c.name}</div>
+                    <button className="btn" onClick={() => remove(c.id)}>Удалить</button>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
