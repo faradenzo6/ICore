@@ -11,7 +11,7 @@ export const router = Router();
 const loginLimiter = rateLimit({ windowMs: 60_000, max: 10 });
 
 router.post('/login', loginLimiter, async (req, res) => {
-  // Вход по логину (username) ИЛИ email, без ограничений на длину
+  // Вход только по логину (username)
   const schema = z.object({
     login: z.string().min(1),
     password: z.string().min(1),
@@ -20,11 +20,7 @@ router.post('/login', loginLimiter, async (req, res) => {
   if (!parsed.success) return res.status(422).json({ message: 'Некорректные данные' });
   const { login, password } = parsed.data;
   const normalized = login.toLowerCase();
-  let user = await prisma.user.findFirst({ where: { OR: [{ email: normalized }, { username: normalized }] } });
-  // Fallback: если введён короткий логин без домена, пробуем email вида login@local
-  if (!user && !normalized.includes('@')) {
-    user = await prisma.user.findUnique({ where: { email: `${normalized}@local` } });
-  }
+  const user = await prisma.user.findUnique({ where: { username: normalized } });
   if (!user) return res.status(401).json({ message: 'Неверный логин или пароль' });
   const ok = await bcrypt.compare(password, user.passwordHash);
   if (!ok) return res.status(401).json({ message: 'Неверный логин или пароль' });
@@ -36,7 +32,7 @@ router.post('/login', loginLimiter, async (req, res) => {
     secure: false,
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
-  return res.json({ id: user.id, email: user.email, role: user.role });
+  return res.json({ id: user.id, username: user.username, role: user.role });
 });
 
 router.post('/logout', (req, res) => {

@@ -44,7 +44,7 @@ app.use('/static/uploads', express.static(uploadDir));
 // routes
 app.use('/api/auth', authRouter);
 app.get('/api/me', authGuard, async (req, res) => {
-  const user = await prisma.user.findUnique({ where: { id: req.user!.userId }, select: { id: true, email: true, role: true } });
+  const user = await prisma.user.findUnique({ where: { id: req.user!.userId }, select: { id: true, username: true, role: true } });
   return res.json(user);
 });
 app.use('/api/products', productsRouter);

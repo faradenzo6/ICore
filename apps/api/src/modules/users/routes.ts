@@ -8,25 +8,24 @@ export const router = Router();
 
 const roleEnum = z.enum(['ADMIN', 'STAFF']);
 const createSchema = z.object({ username: z.string().min(1), password: z.string().min(1), role: roleEnum });
-const updateSchema = z.object({ password: z.string().min(1).optional(), role: roleEnum.optional(), username: z.string().min(1).optional(), email: z.string().min(1).optional() });
+const updateSchema = z.object({ password: z.string().min(1).optional(), role: roleEnum.optional(), username: z.string().min(1).optional() });
 
 router.use(authGuard, requireRole('ADMIN'));
 
 router.get('/', async (_req, res) => {
   const users = await prisma.user.findMany({ orderBy: { createdAt: 'desc' } });
-  res.json(users.map(u => ({ id: u.id, email: u.email, role: u.role, createdAt: u.createdAt })));
+  res.json(users.map(u => ({ id: u.id, username: u.username, role: u.role, createdAt: u.createdAt })));
 });
 
 router.post('/', async (req, res) => {
   const parsed = createSchema.safeParse(req.body);
   if (!parsed.success) return res.status(422).json({ message: 'Валидация не пройдена' });
   const { username, password, role } = parsed.data;
-  const email = `${username.toLowerCase()}@local`;
-  const exists = await prisma.user.findFirst({ where: { OR: [{ email }, { username }] } });
+  const exists = await prisma.user.findFirst({ where: { username } });
   if (exists) return res.status(409).json({ message: 'Пользователь уже существует' });
   const passwordHash = await bcrypt.hash(password, 10);
-  const user = await prisma.user.create({ data: { email, username, passwordHash, role } });
-  res.status(201).json({ id: user.id, email: user.email, username: user.username, role: user.role });
+  const user = await prisma.user.create({ data: { username, passwordHash, role } });
+  res.status(201).json({ id: user.id, username: user.username, role: user.role });
 });
 
 router.put('/:id', async (req, res) => {
@@ -37,9 +36,8 @@ router.put('/:id', async (req, res) => {
   if (parsed.data.role) data.role = parsed.data.role;
   if (parsed.data.password) data.passwordHash = await bcrypt.hash(parsed.data.password, 10);
   if (parsed.data.username) data.username = parsed.data.username;
-  if (parsed.data.email) data.email = parsed.data.email;
   const user = await prisma.user.update({ where: { id }, data });
-  res.json({ id: user.id, email: user.email, username: user.username, role: user.role });
+  res.json({ id: user.id, username: user.username, role: user.role });
 });
 
 router.delete('/:id', async (req, res) => {

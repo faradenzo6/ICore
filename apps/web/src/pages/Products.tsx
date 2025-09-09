@@ -36,11 +36,9 @@ export default function Products() {
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Товары</h1>
-        {canCreate && <CreateProduct onCreated={() => setPage(1)} categories={categories} />}
-        {canCreate && <ManageCategories />}
       </div>
-      <div className="flex gap-2 items-center">
-        <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="Поиск по названию или SKU" className="p-2 rounded bg-[#11161f] border border-neutral-700 w-80" />
+      <div className="flex gap-2 items-center flex-wrap">
+        <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="Поиск по названию" className="p-2 rounded bg-[#11161f] border border-neutral-700 w-80" />
         <select value={category} onChange={(e) => { setCategory(e.target.value ? Number(e.target.value) : ''); setPage(1); }} className="p-2 rounded bg-[#11161f] border border-neutral-700">
           <option value="">Все категории</option>
           {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -56,6 +54,11 @@ export default function Products() {
           <option value="50">50 на странице</option>
           <option value="100">100 на странице</option>
         </select>
+        {/* Кнопки справа после селектов */}
+        <div className="flex gap-2 ml-auto">
+          {canCreate && <CreateProduct onCreated={() => setPage(1)} categories={categories} />}
+          {canCreate && <ManageCategories />}
+        </div>
       </div>
 
       <div className="card overflow-auto">
@@ -64,7 +67,6 @@ export default function Products() {
             <tr>
               <th className="text-left p-2">#</th>
               <th className="text-left p-2">Название</th>
-              <th className="text-left p-2">SKU</th>
               <th className="text-left p-2">Категория</th>
               <th className="text-left p-2">Статус</th>
               {canCreate && <th className="text-left p-2">Действия</th>}
@@ -75,7 +77,6 @@ export default function Products() {
               <tr key={p.id} className="border-t border-neutral-800">
                 <td className="p-2">{p.id}</td>
                 <td className="p-2">{p.name}</td>
-                <td className="p-2">{p.sku}</td>
                 <td className="p-2">{p.category?.name || ''}</td>
                 <td className="p-2">{p.isActive ? 'Активен' : 'Скрыт'}</td>
                 {canCreate && (
@@ -88,8 +89,9 @@ export default function Products() {
                         setItems((prev) => prev ? { ...prev, items: prev.items.filter((x) => x.id !== p.id), total: Math.max(0, prev.total - 1) } : prev);
                         await apiFetch(`/api/products/${p.id}`, { method: 'DELETE' });
                         toast.success('Удалено');
-                      } catch {
-                        toast.error('Ошибка удаления');
+                      } catch (e) {
+                        const msg = (e as Error).message || 'Ошибка удаления';
+                        toast.error(msg);
                         // откат: перезагрузка страницы данных
                         setPage(1);
                       }
@@ -125,19 +127,36 @@ function CreateProduct({ categories, onCreated }: { categories: Category[]; onCr
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [categoryId, setCategoryId] = useState<number | ''>('');
+  const [price, setPrice] = useState<number | ''>('');
+  const [sausagesPerUnit, setSausagesPerUnit] = useState<number | ''>('');
+  const [bunId, setBunId] = useState<number | ''>('');
+  const [sausageId, setSausageId] = useState<number | ''>('');
   const [loading, setLoading] = useState(false);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
 
-  const canSubmit = useMemo(() => Boolean(name), [name]);
+  const isHotDog = useMemo(() => categories.find((c) => c.id === categoryId)?.name === 'Хот-Дог', [categories, categoryId]);
+  const canSubmit = useMemo(() => {
+    if (!name) return false;
+    if (isHotDog) return Boolean(price !== '' && sausagesPerUnit !== '' && categoryId && bunId && sausageId);
+    return true;
+  }, [name, isHotDog, price, sausagesPerUnit, categoryId, bunId, sausageId]);
 
   async function submit() {
     setLoading(true);
     try {
-      await apiFetch('/api/products', {
-        method: 'POST',
-        body: JSON.stringify({ name, categoryId: categoryId || undefined, isActive: true }),
-      });
+      if (isHotDog) {
+        await apiFetch('/api/products', {
+          method: 'POST',
+          body: JSON.stringify({ name, categoryId, isActive: true, price: Number(price), isComposite: true, sausagesPerUnit: Number(sausagesPerUnit), bunComponentId: bunId, sausageComponentId: sausageId }),
+        });
+      } else {
+        await apiFetch('/api/products', {
+          method: 'POST',
+          body: JSON.stringify({ name, categoryId: categoryId || undefined, isActive: true }),
+        });
+      }
       setOpen(false);
-      setName(''); setCategoryId('');
+      setName(''); setCategoryId(''); setPrice(''); setSausagesPerUnit(''); setBunId(''); setSausageId('');
       onCreated();
     } catch (e) {
       alert('Ошибка: ' + (e as Error).message);
@@ -145,6 +164,14 @@ function CreateProduct({ categories, onCreated }: { categories: Category[]; onCr
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      const res = await apiFetch<{ items: Product[]; total: number; page: number; limit: number } | null>('/api/products?page=1&limit=1000');
+      setAllProducts(res?.items || []);
+    })();
+  }, [open]);
 
   return (
     <>
@@ -158,11 +185,27 @@ function CreateProduct({ categories, onCreated }: { categories: Category[]; onCr
             </div>
             <div className="space-y-2">
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Название" className="w-full p-2 rounded bg-[#11161f] border border-neutral-700" />
-              {/* SKU генерируется автоматически на бэкенде */}
+              {/* Код генерируется автоматически на бэкенде */}
               <select value={categoryId} onChange={(e) => setCategoryId(e.target.value ? Number(e.target.value) : '')} className="w-full p-2 rounded bg-[#11161f] border border-neutral-700">
                 <option value="">Без категории</option>
                 {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
+              {isHotDog && (
+                <>
+                  <input type="number" value={price} onChange={(e) => setPrice(e.target.value ? Number(e.target.value) : '')} placeholder="Цена продажи" className="w-full p-2 rounded bg-[#11161f] border border-neutral-700" />
+                  <input type="number" value={sausagesPerUnit} onChange={(e) => setSausagesPerUnit(e.target.value ? Number(e.target.value) : '')} placeholder="Кол-во сосисок на единицу" className="w-full p-2 rounded bg-[#11161f] border border-neutral-700" />
+                  <select value={bunId} onChange={(e) => setBunId(e.target.value ? Number(e.target.value) : '')} className="w-full p-2 rounded bg-[#11161f] border border-neutral-700">
+                    <option value="">Выберите лепёшки (компонент)</option>
+                    {allProducts.filter((p) => p.name.toLowerCase().includes('лепёш')).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                  <select value={sausageId} onChange={(e) => setSausageId(e.target.value ? Number(e.target.value) : '')} className="w-full p-2 rounded bg-[#11161f] border border-neutral-700">
+                    <option value="">Выберите сосиски (компонент)</option>
+                    {allProducts.filter((p) => p.name.toLowerCase().includes('сосиск')).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                  <div className="text-xs text-neutral-400">Склад пополняем только лепёшками и сосисками; стоимость компонентов в прибыль не входит.</div>
+                </>
+              )}
+              {/* Настройки для составного товара (Хот-Дог) можно добавить позже отдельной формой */}
               {/* Цены управляются через раздел Склад */}
               <div className="flex gap-2 justify-end">
                 <button className="btn" disabled={!canSubmit || loading} onClick={submit}>{loading ? '...' : 'Создать'}</button>
@@ -213,7 +256,7 @@ function EditProduct({ product, categories, onUpdated }: { product: Product; cat
             </div>
             <div className="space-y-2">
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Название" className="w-full p-2 rounded bg-[#11161f] border border-neutral-700" />
-              <input value={sku} onChange={(e) => setSku(e.target.value)} placeholder="SKU" className="w-full p-2 rounded bg-[#11161f] border border-neutral-700" />
+              <input value={sku} onChange={(e) => setSku(e.target.value)} placeholder="Код" className="w-full p-2 rounded bg-[#11161f] border border-neutral-700" />
               <select value={categoryId} onChange={(e) => setCategoryId(e.target.value ? Number(e.target.value) : '')} className="w-full p-2 rounded bg-[#11161f] border border-neutral-700">
                 <option value="">Без категории</option>
                 {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}

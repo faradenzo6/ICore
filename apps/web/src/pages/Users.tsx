@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../lib/api';
 
-type User = { id: number; email: string; username?: string; role: 'ADMIN'|'STAFF_MANAGER'|'STAFF'; createdAt: string };
+type User = { id: number; username?: string; role: 'ADMIN'|'STAFF_MANAGER'|'STAFF'; createdAt: string };
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -48,7 +48,6 @@ export default function UsersPage() {
         <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Пароль" className="p-2 rounded bg-[#11161f] border border-neutral-700" />
         <select value={role} onChange={(e) => setRole(e.target.value as User['role'])} className="p-2 rounded bg-[#11161f] border border-neutral-700">
           <option value="ADMIN">Администратор</option>
-          <option value="STAFF_MANAGER">Менеджер смены</option>
           <option value="STAFF">Сотрудник</option>
         </select>
         <button className="btn" onClick={createUser}>Создать</button>
@@ -58,7 +57,7 @@ export default function UsersPage() {
         <table className="min-w-full text-sm">
           <thead className="text-neutral-400">
             <tr>
-              <th className="text-left p-2">Email</th>
+              <th className="text-left p-2">Логин</th>
               <th className="text-left p-2">Роль</th>
               <th className="text-left p-2">Действия</th>
             </tr>
@@ -66,11 +65,10 @@ export default function UsersPage() {
           <tbody>
             {users.map((u) => (
               <tr key={u.id} className="border-t border-neutral-800">
-                <td className="p-2">{u.email}{u.username ? ` (${u.username})` : ''}</td>
+                <td className="p-2">{u.username || ''}</td>
                 <td className="p-2">
                   <select value={u.role} onChange={(e) => updateRole(u.id, e.target.value as User['role'])} className="p-1 rounded bg-[#11161f] border border-neutral-700">
                     <option value="ADMIN">Администратор</option>
-                    <option value="STAFF_MANAGER">Менеджер смены</option>
                     <option value="STAFF">Сотрудник</option>
                   </select>
                 </td>

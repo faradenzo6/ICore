@@ -33,17 +33,18 @@ export default function SalesNew() {
 
   async function pay() {
     if (!cart.length) return;
+    if (!payment) { toast.error('Выберите способ оплаты'); return; }
     const items = cart.map((i) => ({ productId: i.product.id, quantity: i.quantity, unitPrice: i.unitPrice }));
     try {
       await apiFetch<{ id: number }>('/api/sales', {
         method: 'POST',
-        body: JSON.stringify({ items, discount: discount || undefined, paymentMethod: payment || undefined }),
+        body: JSON.stringify({ items, discount: discount || undefined, paymentMethod: payment }),
       });
       // Продажа фиксируется, чек не скачиваем
       setCart([]); setDiscount(0); setPayment('');
       toast.success('Продажа оформлена');
-    } catch {
-      toast.error('Не удалось оформить продажу');
+    } catch (e) {
+      toast.error((e as Error).message || 'Не удалось оформить продажу');
     }
   }
 
@@ -68,7 +69,8 @@ export default function SalesNew() {
           // Закрыть подсказки при клике вне (задержка чтобы клик по элементу успел обработаться)
           setTimeout(() => setSuggestions([]), 100);
         }}>
-          <input autoFocus value={query} onFocus={async () => {
+          <input value={query} onFocus={async () => {
+            // Автофокуса при входе нет, но при фокусе показываем список как раньше
             const res = await apiFetch<{ items: Product[]; total: number; page: number; limit: number }>(`/api/products?limit=5`);
             setSuggestions(res.items);
           }} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { addByName(query); setQuery(''); setSuggestions([]); } }} placeholder="Поиск товара" className="p-2 rounded bg-[#11161f] border border-neutral-700 w-full" />

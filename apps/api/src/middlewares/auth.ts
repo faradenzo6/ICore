@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 
 export type JwtPayload = {
   userId: number;
-  role: 'ADMIN' | 'STAFF_MANAGER' | 'STAFF';
+  role: 'ADMIN' | 'STAFF';
 };
 
 declare module 'express-serve-static-core' {

@@ -29,8 +29,8 @@ function App() {
             <Route path="/" element={<RequireAuth><AppLayout /></RequireAuth>}>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/products" element={<Products />} />
-              <Route path="/sales/new" element={<RequireAuth roles={["ADMIN","STAFF_MANAGER","STAFF"]}><SalesNew /></RequireAuth>} />
-              <Route path="/stock" element={<RequireAuth roles={["ADMIN","STAFF_MANAGER"]}><Stock /></RequireAuth>} />
+              <Route path="/sales/new" element={<RequireAuth roles={["ADMIN","STAFF"]}><SalesNew /></RequireAuth>} />
+              <Route path="/stock" element={<RequireAuth roles={["ADMIN"]}><Stock /></RequireAuth>} />
               <Route path="/reports" element={<Reports />} />
               <Route path="/users" element={<RequireAuth roles={["ADMIN"]}><Users /></RequireAuth>} />
             </Route>

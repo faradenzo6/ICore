@@ -11,8 +11,7 @@ datasource db {
 
 model User {
   id           Int      @id @default(autoincrement())
-  email        String   @unique
-  username     String?  @unique
+  username     String   @unique
   passwordHash String
   role         String
   createdAt    DateTime @default(now())
@@ -37,6 +36,15 @@ model Product {
   costPrice Decimal   @default(0)
   imageUrl  String?
   stock     Int       @default(0)
+  packSize  Int       @default(1) // множитель для поступления (1 пачка = N штук)
+  isComposite Boolean @default(false) // составной товар (например, хот-дог)
+  bunComponentId Int?
+  bunComponent   Product? @relation("Product_BunComponent", fields: [bunComponentId], references: [id])
+  bunChildren    Product[] @relation("Product_BunComponent")
+  sausageComponentId Int?
+  sausageComponent   Product? @relation("Product_SausageComponent", fields: [sausageComponentId], references: [id])
+  sausageChildren    Product[] @relation("Product_SausageComponent")
+  sausagesPerUnit Int?
   isActive  Boolean   @default(true)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -53,6 +61,7 @@ model StockMovement {
   type      String
   quantity  Int
   unitPrice Decimal?
+  unitCost  Decimal?  // снимок себестоимости на момент движения
   note      String?
   userId    Int
   user      User      @relation(fields: [userId], references: [id])
@@ -82,6 +91,7 @@ model SaleItem {
   product    Product  @relation(fields: [productId], references: [id])
   quantity   Int
   unitPrice  Decimal
+  unitCost   Decimal?
 }
 
 

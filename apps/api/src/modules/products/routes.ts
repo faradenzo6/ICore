@@ -14,6 +14,11 @@ const productSchema = z.object({
   imageUrl: z.string().url().optional().nullable(),
   stock: z.number().int().nonnegative().optional(),
   isActive: z.boolean().optional(),
+  packSize: z.number().int().positive().optional(),
+  isComposite: z.boolean().optional(),
+  bunComponentId: z.number().int().optional().nullable(),
+  sausageComponentId: z.number().int().optional().nullable(),
+  sausagesPerUnit: z.number().int().positive().optional(),
 });
 
 router.get('/', authGuard, async (req, res) => {
@@ -70,6 +75,11 @@ router.post('/', authGuard, requireRole('ADMIN'), async (req, res) => {
     imageUrl: data.imageUrl ?? undefined,
     stock: data.stock ?? 0,
     isActive: data.isActive ?? true,
+    packSize: data.packSize ?? 1,
+    isComposite: data.isComposite ?? false,
+    bunComponentId: data.bunComponentId ?? null,
+    sausageComponentId: data.sausageComponentId ?? null,
+    sausagesPerUnit: data.sausagesPerUnit ?? null,
   }});
   res.status(201).json(created);
 });
@@ -84,14 +94,28 @@ router.put('/:id', authGuard, requireRole('ADMIN'), async (req, res) => {
     categoryId: data.categoryId ?? undefined,
     costPrice: data.costPrice ?? undefined,
     imageUrl: data.imageUrl ?? undefined,
+    packSize: data.packSize ?? undefined,
+    isComposite: data.isComposite ?? undefined,
+    bunComponentId: data.bunComponentId ?? undefined,
+    sausageComponentId: data.sausageComponentId ?? undefined,
+    sausagesPerUnit: data.sausagesPerUnit ?? undefined,
   }});
   res.json(updated);
 });
 
 router.delete('/:id', authGuard, requireRole('ADMIN'), async (req, res) => {
   const id = Number(req.params.id);
-  await prisma.product.delete({ where: { id } });
-  res.json({ message: 'OK' });
+  try {
+    await prisma.product.delete({ where: { id } });
+    return res.json({ message: 'OK' });
+  } catch (err: any) {
+    // Объясняем FK-ошибку человеку
+    if (err?.code === 'P2003') {
+      return res.status(409).json({ message: 'Нельзя удалить товар: есть связанные продажи или движения склада' });
+    }
+    console.error(err);
+    return res.status(500).json({ message: 'Ошибка удаления' });
+  }
 });
 
 

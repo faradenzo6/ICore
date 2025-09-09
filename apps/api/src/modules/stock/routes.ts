@@ -8,7 +8,7 @@ export const router = Router();
 const inSchema = z.object({
   productId: z.number().int(),
   quantity: z.number().int().positive(),
-  unitPrice: z.number().nonnegative().optional(), // закупочная (себестоимость)
+  unitPrice: z.number().nonnegative().optional(), // цена закупки за упаковку/единицу
   salePrice: z.number().nonnegative().optional(), // цена продажи
   note: z.string().optional(),
 });
@@ -19,7 +19,7 @@ const outSchema = z.object({
   note: z.string().optional(),
 });
 
-router.post('/in', authGuard, requireRole('ADMIN', 'STAFF_MANAGER'), async (req, res) => {
+router.post('/in', authGuard, requireRole('ADMIN'), async (req, res) => {
   const parsed = inSchema.safeParse(req.body);
   if (!parsed.success) return res.status(422).json({ message: 'Валидация не пройдена' });
   const { productId, quantity, unitPrice, salePrice, note } = parsed.data;
@@ -27,20 +27,37 @@ router.post('/in', authGuard, requireRole('ADMIN', 'STAFF_MANAGER'), async (req,
   const userId = req.user!.userId;
 
   const result = await prisma.$transaction(async (tx) => {
+    const existing = await tx.product.findUnique({ where: { id: productId }, include: { category: true } });
+    if (!existing) throw new Error('Товар не найден');
+
+    // Автоправило: если packSize не задан, применяем дефолты
+    const name = (existing.name || '').toLowerCase();
+    const isSausage = name.includes('сосиск');
+    const isBread = name.includes('лепёш') || name.includes('лепеш');
+    const defaultPackSize = existing.packSize && existing.packSize > 1
+      ? existing.packSize
+      : (existing.category?.name === 'Сосиски' || isSausage ? 12 : (existing.category?.name === 'Лепёшки' || isBread ? 2 : 1));
+
+    const multiplier = Math.max(1, defaultPackSize);
+    const effectiveQty = quantity * multiplier; // кладём на склад в штуках
+    const costPerUnit = unitPrice !== undefined ? Number(unitPrice) / multiplier : undefined;
+
     const product = await tx.product.update({
       where: { id: productId },
       data: {
-        stock: { increment: quantity },
-        ...(unitPrice !== undefined ? { costPrice: unitPrice } : {}),
+        stock: { increment: effectiveQty },
+        ...(costPerUnit !== undefined ? { costPrice: costPerUnit } : {}),
         ...(salePrice !== undefined ? { price: salePrice } : {}),
+        ...(existing.packSize !== multiplier ? { packSize: multiplier } : {}),
       },
     });
     await tx.stockMovement.create({
       data: {
         productId,
         type: 'IN',
-        quantity,
-        unitPrice: unitPrice ?? null,
+        quantity: effectiveQty,
+        unitPrice: null, // для поступлений продажная цена не фиксируется
+        unitCost: costPerUnit ?? null,
         note,
         userId,
       },
@@ -51,7 +68,7 @@ router.post('/in', authGuard, requireRole('ADMIN', 'STAFF_MANAGER'), async (req,
   res.json(result);
 });
 
-router.post('/out', authGuard, requireRole('ADMIN', 'STAFF_MANAGER'), async (req, res) => {
+router.post('/out', authGuard, requireRole('ADMIN'), async (req, res) => {
   const parsed = outSchema.safeParse(req.body);
   if (!parsed.success) return res.status(422).json({ message: 'Валидация не пройдена' });
   const { productId, quantity, note } = parsed.data;

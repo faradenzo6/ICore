@@ -29,7 +29,8 @@ export default function ReportsPage() {
     setTop(topData);
   }
 
-  useEffect(() => { load(); }, [bucket]);
+  // Перезагружать данные при изменении любых фильтров
+  useEffect(() => { load(); }, [bucket, from, to, categoryId]);
   useEffect(() => {
     const today = new Date();
     const yyyy = today.getFullYear();
@@ -68,8 +69,8 @@ export default function ReportsPage() {
   }, [bucket]);
   useEffect(() => { (async () => { const cats = await apiFetch<Category[]>('/api/categories'); setCategories(cats); })(); }, []);
 
-  function exportStockCsv() { window.open('/api/reports/stock-export.csv', '_blank'); }
-  function exportSalesCsv() { window.open('/api/sales/export.csv', '_blank'); }
+  function exportStockCsv() { window.open('/api/reports/stock-export.xlsx', '_blank'); }
+  function exportSalesCsv() { window.open('/api/sales/export.xlsx', '_blank'); }
 
   const totalRevenue = useMemo(() => summary.reduce((s, r) => s + r.revenue, 0), [summary]);
 
@@ -108,8 +109,8 @@ export default function ReportsPage() {
           </select>
         </div>
         <button className="btn" onClick={load}>Показать</button>
-        <button className="btn" onClick={exportSalesCsv}>Экспорт продаж CSV</button>
-        <button className="btn" onClick={exportStockCsv}>Экспорт остатков CSV</button>
+        <button className="btn" onClick={exportSalesCsv}>Экспорт продаж Excel</button>
+        <button className="btn" onClick={exportStockCsv}>Экспорт остатков Excel</button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

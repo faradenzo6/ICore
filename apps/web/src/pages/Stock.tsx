@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../lib/api';
 
 type Product = { id: number; name: string; sku: string; stock?: number };
-type Movement = { id: number; product: Product; type: string; quantity: number; unitPrice?: number|null; note?: string|null; createdAt: string };
+type Movement = { id: number; product: Product; type: string; quantity: number; unitPrice?: number|null; unitCost?: number|null; note?: string|null; createdAt: string };
 
 export default function StockPage() {
   const [query, setQuery] = useState('');
@@ -13,7 +13,7 @@ export default function StockPage() {
   const [priceIn, setPriceIn] = useState<number | ''>('');
   const [salePrice, setSalePrice] = useState<number | ''>('');
   // OUT убираем
-  const [note, setNote] = useState('');
+  // Примечание удалено по требованиям UX
 
   const [movements, setMovements] = useState<Movement[]>([]);
   const [from, setFrom] = useState('');
@@ -28,7 +28,7 @@ export default function StockPage() {
 
   async function doIn() {
     if (!product) return;
-    await apiFetch('/api/stock/in', { method: 'POST', body: JSON.stringify({ productId: product.id, quantity: qtyIn, unitPrice: priceIn || undefined, salePrice: salePrice || undefined, note: note || undefined }) });
+    await apiFetch('/api/stock/in', { method: 'POST', body: JSON.stringify({ productId: product.id, quantity: qtyIn, unitPrice: priceIn || undefined, salePrice: salePrice || undefined }) });
     alert('Поступление добавлено');
     loadMovements();
   }
@@ -58,13 +58,13 @@ export default function StockPage() {
 
       <div className="card p-4 grid gap-3 md:grid-cols-6 items-end">
         <div className="md:col-span-2 relative" onBlur={() => setTimeout(() => setSuggestions([]), 100)}>
-          <label className="block text-sm text-neutral-400 mb-1">Поиск товара (SKU/название)</label>
+          <label className="block text-sm text-neutral-400 mb-1">Поиск товара (название)</label>
           <div className="flex gap-2">
-            <input value={query} onChange={async (e) => { setQuery(e.target.value); if (e.target.value.trim()) { const res = await apiFetch<{ items: Product[]; total: number; page: number; limit: number }>(`/api/products?search=${encodeURIComponent(e.target.value)}&limit=5`); setSuggestions(res.items); } else { setSuggestions([]); } }} onFocus={findProduct} placeholder="Введите название или SKU" className="w-full p-2 rounded bg-[#11161f] border border-neutral-700" />
+            <input value={query} onChange={async (e) => { setQuery(e.target.value); if (e.target.value.trim()) { const res = await apiFetch<{ items: Product[]; total: number; page: number; limit: number }>(`/api/products?search=${encodeURIComponent(e.target.value)}&limit=5`); setSuggestions(res.items); } else { setSuggestions([]); } }} onFocus={findProduct} placeholder="Введите название" className="w-full p-2 rounded bg-[#11161f] border border-neutral-700" />
             <button className="btn" onClick={findProduct}>Найти</button>
           </div>
           {suggestions.length > 0 && (
-            <div className="absolute z-10 mt-1 w-full max-h-60 overflow-auto bg-[#1E222B] border border-neutral-700 rounded">
+            <div className="absolute z-50 mt-1 w-full max-h-60 overflow-auto bg-[#1E222B] border border-neutral-700 rounded shadow-lg">
               {suggestions.map((p) => (
                 <div key={p.id} className="px-3 py-2 hover:bg-[#2a2f3a] cursor-pointer" onClick={() => { setProduct(p); setQuery(`${p.name}`); setSuggestions([]); }}>
                   {p.name} <span className="text-neutral-400">({p.sku})</span>
@@ -72,55 +72,54 @@ export default function StockPage() {
               ))}
             </div>
           )}
-          {product && <div className="text-sm text-neutral-300 mt-1">Выбран: {product.name} ({product.sku})</div>}
+          {/* Отображение выбранного товара в отдельной строке убрано для стабильной сетки */}
         </div>
         <div>
           <label className="block text-sm text-neutral-400 mb-1">Поступление: кол-во</label>
           <input type="number" value={qtyIn} onChange={(e) => setQtyIn(Math.max(1, Number(e.target.value)))} className="w-full p-2 rounded bg-[#11161f] border border-neutral-700" />
         </div>
         <div>
-          <label className="block text-sm text-neutral-400 mb-1">Поступление: цена закупки</label>
+          <label className="block text-sm text-neutral-400 mb-1">Цена закупки</label>
           <input type="number" value={priceIn} onChange={(e) => setPriceIn(e.target.value ? Number(e.target.value) : '')} className="w-full p-2 rounded bg-[#11161f] border border-neutral-700" />
         </div>
         <div>
           <label className="block text-sm text-neutral-400 mb-1">Цена продажи</label>
           <input type="number" value={salePrice} onChange={(e) => setSalePrice(e.target.value ? Number(e.target.value) : '')} className="w-full p-2 rounded bg-[#11161f] border border-neutral-700" />
         </div>
-        <div>
+        <div className="md:col-span-1 flex items-end">
           <button className="btn w-full" onClick={doIn} disabled={!product}>Добавить</button>
         </div>
         {/* Блок списания удалён */}
-        <div className="md:col-span-2">
-          <label className="block text-sm text-neutral-400 mb-1">Примечание</label>
-          <input value={note} onChange={(e) => setNote(e.target.value)} className="w-full p-2 rounded bg-[#11161f] border border-neutral-700" />
-        </div>
-        {/* Кнопка списания удалена */}
       </div>
 
-      <div className="card p-4 space-y-3">
-        <div>
-          <div className="font-medium mb-2">Товары на складе</div>
-          <div className="overflow-auto max-h-64 border border-neutral-800 rounded">
-            <table className="min-w-full text-sm">
-              <thead className="bg-[#121822] text-neutral-300 sticky top-0 z-10">
-                <tr>
-                  <th className="text-left p-2">Название</th>
-                  <th className="text-left p-2">SKU</th>
-                  <th className="text-left p-2">Остаток</th>
+      {/* Товары на складе */}
+      <div className="card p-4">
+        <div className="font-medium mb-2">Товары на складе</div>
+        <div className="overflow-auto max-h-64 border border-neutral-800 rounded">
+          <table className="min-w-full text-sm">
+            <thead className="bg-[#121822] text-neutral-300 sticky top-0 z-10">
+              <tr>
+                <th className="text-left p-2">Название</th>
+                <th className="text-left p-2">Код</th>
+                <th className="text-left p-2">Остаток</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allProducts.map((p) => (
+                <tr key={p.id} className="border-t border-neutral-800">
+                  <td className="p-2">{p.name}</td>
+                  <td className="p-2">{p.sku}</td>
+                  <td className="p-2">{typeof p.stock === 'number' ? p.stock : ''}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {allProducts.map((p) => (
-                  <tr key={p.id} className="border-t border-neutral-800">
-                    <td className="p-2">{p.name}</td>
-                    <td className="p-2">{p.sku}</td>
-                    <td className="p-2">{typeof p.stock === 'number' ? p.stock : ''}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
         </div>
+      </div>
+
+      {/* История продаж / движений */}
+      <div className="card p-4 space-y-3">
+        <div className="font-medium">История продаж</div>
         <div className="flex flex-wrap gap-2 items-end">
           <div>
             <label className="block text-sm text-neutral-400 mb-1">От</label>
@@ -151,8 +150,9 @@ export default function StockPage() {
                 <th className="text-left p-2">Товар</th>
                 <th className="text-left p-2">Операция</th>
                 <th className="text-left p-2">Кол-во</th>
-                <th className="text-left p-2">Цена</th>
-                <th className="text-left p-2">Примечание</th>
+                <th className="text-left p-2">Цена закупки</th>
+                <th className="text-left p-2">Цена продажи</th>
+                <th className="text-left p-2">Чистая прибыль</th>
               </tr>
             </thead>
             <tbody>
@@ -160,10 +160,11 @@ export default function StockPage() {
                 <tr key={m.id} className="border-t border-neutral-800">
                   <td className="p-2">{new Date(m.createdAt).toLocaleString('ru-RU')}</td>
                   <td className="p-2">{m.product.name}</td>
-                  <td className="p-2">{m.type === 'IN' ? 'Поступление' : m.type === 'OUT' ? 'Списание' : 'Корректировка'}</td>
+                  <td className="p-2">{m.type === 'IN' ? 'Поступление' : m.type === 'OUT' ? 'Продажа' : 'Корректировка'}</td>
                   <td className="p-2">{m.quantity}</td>
-                  <td className="p-2">{m.unitPrice ?? ''}</td>
-                  <td className="p-2">{m.note ?? ''}</td>
+                  <td className="p-2">{m.unitCost ?? ''}</td>
+                  <td className="p-2">{m.type === 'OUT' ? (m.unitPrice ?? '') : ''}</td>
+                  <td className="p-2">{m.type === 'OUT' && m.unitPrice != null ? (Number(m.unitPrice) - Number(m.unitCost || 0)) * m.quantity : ''}</td>
                 </tr>
               ))}
             </tbody>
