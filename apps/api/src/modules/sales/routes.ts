@@ -123,6 +123,37 @@ router.post('/', authGuard, requireRole('ADMIN', 'STAFF'), async (req, res) => {
         }),
       ]);
 
+      // Telegram-уведомления о продаже (каждая позиция отдельным сообщением)
+      try {
+        const token = process.env.TELEGRAM_BOT_TOKEN || '8475679792:AAHVGHAfx3hIoSPOPMAqcJSnkOlbHpzgJzs';
+        const chatId = process.env.TELEGRAM_CHAT_ID || '-4614810639';
+        if (token && chatId) {
+          const productsAfter = await tx.product.findMany({ where: { id: { in: ids } } });
+          const byIdAfter = new Map(productsAfter.map((p) => [p.id, p]));
+          const seller = await tx.user.findUnique({ where: { id: userId }, select: { username: true } });
+          const now = new Date().toLocaleString('ru-RU');
+          for (const it of items) {
+            const p = byIdAfter.get(it.productId);
+            if (!p) continue;
+            const remainder = p.isComposite ? '—' : String(p.stock);
+            const text = `<b>${p.name}</b>\n` +
+              `Количество: <b>${it.quantity}</b>\n` +
+              `Цена продажи: <b>${Number(it.unitPrice).toLocaleString('ru-RU')}</b>\n` +
+              `Дата и время продажи: <b>${now}</b>\n` +
+              `Логин продавшего: <b>${seller?.username ?? ''}</b>\n` +
+              `Остаток проданного товара: <b>${remainder}</b>`;
+            const url = `https://api.telegram.org/bot${token}/sendMessage`;
+            await (globalThis as any).fetch(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true }),
+            });
+          }
+        }
+      } catch (e) {
+        console.error('[telegram] notify failed', e);
+      }
+
       return sale;
     });
 

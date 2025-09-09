@@ -9,9 +9,9 @@ export default function AppLayout() {
   return (
     <div className="min-h-screen grid grid-rows-[auto,1fr]">
       <header className="border-b border-neutral-800 bg-[var(--panel)]">
-        <div className="max-w-6xl mx-auto px-4 h-12 flex items-center gap-4">
-          <Link to="/dashboard" className="font-semibold text-white">ARENA</Link>
-          <nav className="flex items-center gap-1 text-neutral-200 text-sm">
+        <div className="max-w-7xl mx-auto px-6 h-14 flex items-center gap-4">
+          <Link to="/dashboard" className="font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-red-900 text-2xl tracking-wide">ARENA</Link>
+          <nav className="flex items-center gap-2 text-neutral-200 text-base">
             {user?.role === 'ADMIN' && <Tab to="/products" active={is('/products')}>Товары</Tab>}
             <Tab to="/sales/new" active={is('/sales')}>Продажа</Tab>
             <Tab to="/stock" active={is('/stock')}>Склад</Tab>
@@ -23,7 +23,7 @@ export default function AppLayout() {
           </div>
         </div>
       </header>
-      <main className="max-w-6xl mx-auto px-4 w-full">
+      <main className="max-w-7xl mx-auto px-6 w-full">
         <Outlet />
       </main>
     </div>

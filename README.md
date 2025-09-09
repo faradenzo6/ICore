@@ -16,7 +16,7 @@ URL:
 - API: http://localhost:5050
 - Web: http://localhost:5175
 
-Дефолтный админ: admin@local / admin123
+Дефолтный админ: admin / admin123
 
 Переменные окружения в `.env.example`
 
@@ -66,7 +66,8 @@ cd D:\LootBox
 JWT_SECRET=supersecret
 CORS_ORIGIN=http://localhost:5175
 API_PORT=5050
-UPLOAD_DIR=
+TELEGRAM_BOT_TOKEN=8475679792:AAHVGHAfx3hIoSPOPMAqcJSnkOlbHpzgJzs
+TELEGRAM_CHAT_ID=-4614810639
 ```
 Примечания:
 - `CORS_ORIGIN` укажите на домен, откуда будет открываться фронтенд (в dev это `http://localhost:5175`). В продакшене фронт раздаётся самим API, поэтому можно оставить значение по умолчанию.
@@ -77,7 +78,7 @@ UPLOAD_DIR=
 npm install
 npm run prisma:reset
 ```
-Команда `prisma:reset` синхронизирует схему SQLite и выполнит сидинг админа: `admin@local / admin123`.
+Команда `prisma:reset` синхронизирует схему SQLite и выполнит сидинг админа: `admin / admin123`.
 
 5) Запуск в режиме разработки (горячая перезагрузка)
 ```powershell
@@ -95,6 +96,36 @@ npm start
 После старта API:
 - Приложение будет доступно на `http://localhost:5050`
 - API — на `http://localhost:5050/api`
+
+6.1) Docker (локальный запуск)
+
+Сборка образа (из корня проекта):
+```powershell
+docker build -t arenapos:latest .
+```
+
+Создание тома для БД SQLite и запуск контейнера:
+```powershell
+docker volume create arenapos_data
+docker run -d --name arenapos \ 
+  -p 5050:5050 \ 
+  -e NODE_ENV=production \ 
+  -e API_PORT=5050 \ 
+  -e JWT_SECRET=supersecret \ 
+  -e TELEGRAM_BOT_TOKEN=8475679792:AAHVGHAfx3hIoSPOPMAqcJSnkOlbHpzgJzs \ 
+  -e TELEGRAM_CHAT_ID=-4614810639 \ 
+  -v arenapos_data:/app/apps/api/prisma \ 
+  arenapos:latest
+```
+
+Примечания:
+- Внутри контейнера API доступен на `5050`, фронт раздается тем же процессом.
+- Том примонтирован к каталогу `apps/api/prisma`, чтобы сохранялась база данных SQLite (`dev.db`).
+- Остановить/удалить:
+```powershell
+docker stop arenapos
+docker rm arenapos
+```
 
 7) Развёртывание на Windows Server (standalone)
 - Откройте порт в брандмауэре Windows (пример для PowerShell — для входящих TCP 5050):
@@ -128,6 +159,31 @@ npm start
 ```powershell
 "C:\path\to\nssm.exe" stop arena-pos
 "C:\path\to\nssm.exe" remove arena-pos confirm
+```
+
+8.1) Автозапуск Docker-контейнера на Windows
+
+Вариант A — перезапуск при падении и автозапуск при старте Docker Desktop:
+```powershell
+docker update --restart=always arenapos
+```
+Убедитесь, что Docker Desktop настроен «Start Docker Desktop when you log in».
+
+Вариант B — через Планировщик заданий Windows:
+1. Откройте «Планировщик заданий» → «Создать задачу…».
+2. Триггеры: «При входе в систему» для вашего пользователя или «При запуске».
+3. Действие: Программа/скрипт: `powershell.exe`
+   Аргументы:
+```powershell
+-NoProfile -ExecutionPolicy Bypass -Command "docker start arenapos"
+```
+4. В «Параметры» включите «Запускать с наивысшими правами».
+
+Вариант C — как Windows-служба через NSSM (для Docker):
+```powershell
+"C:\path\to\nssm.exe" install arenapos-docker "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" "-NoProfile -ExecutionPolicy Bypass -Command docker start arenapos"
+"C:\path\to\nssm.exe" set arenapos-docker AppDirectory C:\Users\<user>
+"C:\path\to\nssm.exe" start arenapos-docker
 ```
 
 9) Обновление сервера до новой версии
@@ -182,7 +238,7 @@ sudo systemctl status arena-pos
 ```
 
 11) Тестовые учётные данные
-- Админ: `admin@local / admin123`
+- Админ: `admin / admin123`
 
 12) Частые проблемы и решения
 - Порт 5050 занят (Windows):

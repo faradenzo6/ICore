@@ -1,0 +1,29 @@
+# Node modules
+node_modules
+apps/*/node_modules
+
+# Git
+.git
+.gitignore
+
+# Logs & OS
+npm-debug.log*
+.DS_Store
+
+# Envs
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Builds & caches
+**/dist
+**/coverage
+**/.turbo
+**/.next
+**/build
+**/.cache
+**/*.local
+
+# Uploads (генерируемые)
+uploads

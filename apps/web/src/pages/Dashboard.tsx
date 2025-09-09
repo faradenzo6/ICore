@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 
-type Row = { period: string; revenue: number; count: number; avg: number };
+type Row = { period: string; revenue: number; count: number; avg: number; profit?: number };
 
 export default function Dashboard() {
   const [rows, setRows] = useState<Row[]>([]);
@@ -19,10 +19,12 @@ export default function Dashboard() {
 
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-semibold">Дашборд</h1>
+      <h1 className="text-3xl font-semibold">Дашборд</h1>
       <div className="flex gap-2">
         {(['day','week','month','year'] as const).map((b) => (
-          <button key={b} className={`btn ${bucket===b? 'opacity-100':'opacity-80'}`} onClick={() => setBucket(b)}>{b}</button>
+          <button key={b} className={`btn ${bucket===b? 'opacity-100':'opacity-80'}`} onClick={() => setBucket(b)}>
+            {b==='day'?'день':b==='week'?'неделя':b==='month'?'месяц':'год'}
+          </button>
         ))}
       </div>
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -39,12 +41,12 @@ export default function Dashboard() {
           <div className="text-2xl">{formatUZS(today?.avg ?? 0)}</div>
         </div>
         <div className="card p-4">
-          <div className="text-neutral-400 text-sm">Период</div>
-          <div className="text-2xl">{bucket}</div>
+          <div className="text-neutral-400 text-sm">Чистая прибыль</div>
+          <div className="text-2xl">{formatUZS(rows.reduce((s,r)=>s+(r.profit||0),0))}</div>
         </div>
       </div>
       <div className="card p-4">
-        <h2 className="font-medium mb-2">Выручка по периодам</h2>
+        <h2 className="font-medium mb-2 text-xl">Выручка по периодам</h2>
         <div className="h-72">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={rows} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
@@ -52,7 +54,7 @@ export default function Dashboard() {
               <XAxis dataKey="period" stroke="#9aa4b2" tick={{ fontSize: 12 }} />
               <YAxis stroke="#9aa4b2" tick={{ fontSize: 12 }} />
               <Tooltip formatter={(v: number | string) => formatUZS(Number(v))} contentStyle={{ background: '#1E222B', border: '1px solid #2a2f3a' }} />
-              <Line type="monotone" dataKey="revenue" stroke="#FF6A3D" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="revenue" name="Выручка" stroke="#FF6A3D" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>
