@@ -15,8 +15,8 @@ RUN npm ci
 # Build web+api via root script
 RUN npm run build
 
-# Generate Prisma Client in base and keep node_modules
-RUN npx -y prisma generate --schema=apps/api/prisma/schema.prisma
+# Generate Prisma Client using workspace prisma version
+RUN npm --workspace apps/api exec prisma generate --schema=apps/api/prisma/schema.prisma
 
 FROM node:20-bookworm-slim AS runner
 ENV NODE_ENV=production
