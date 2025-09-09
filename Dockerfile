@@ -1,12 +1,13 @@
 # Multi-stage build: build web, compile api, run api + serve web build
 
-FROM node:20-alpine AS base
+FROM node:20-bookworm-slim AS base
 WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY apps ./apps
 
 # Build deps for native modules (e.g., bcrypt)
-RUN apk add --no-cache --virtual .gyp python3 make g++
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
 
 # Install deps for all workspaces (dev deps included)
 RUN npm ci
@@ -17,12 +18,13 @@ RUN npm run build
 # Generate Prisma Client in base and keep node_modules
 RUN npx -y prisma generate --schema=apps/api/prisma/schema.prisma
 
-FROM node:20-alpine AS runner
+FROM node:20-bookworm-slim AS runner
 ENV NODE_ENV=production
 WORKDIR /app
 
-# Prisma требует OpenSSL 1.1 на musl (Alpine)
-RUN apk add --no-cache openssl1.1-compat
+# Ensure certs present
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates openssl \
+  && rm -rf /var/lib/apt/lists/*
 
 # Copy built app
 COPY --from=base /app/apps/api/dist ./apps/api/dist
