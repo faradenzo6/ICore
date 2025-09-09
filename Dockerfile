@@ -15,7 +15,7 @@ RUN npm ci
 RUN npm run build
 
 # Generate Prisma Client in base and keep node_modules
-RUN npx --yes prisma --schema=apps/api/prisma/schema.prisma generate
+RUN npx -y prisma generate --schema=apps/api/prisma/schema.prisma
 
 FROM node:20-alpine AS runner
 ENV NODE_ENV=production
