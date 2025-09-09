@@ -21,6 +21,9 @@ FROM node:20-alpine AS runner
 ENV NODE_ENV=production
 WORKDIR /app
 
+# Prisma требует OpenSSL 1.1 на musl (Alpine)
+RUN apk add --no-cache openssl1.1-compat
+
 # Copy built app
 COPY --from=base /app/apps/api/dist ./apps/api/dist
 COPY --from=base /app/apps/web/dist ./apps/web/dist
