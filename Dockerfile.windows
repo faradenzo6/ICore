@@ -1,0 +1,53 @@
+# Используйте Windows-контейнеры на Windows Server (Docker Engine via DockerMsftProvider / MCR)
+# Образ сборки
+FROM node:20-windowsservercore-ltsc2022 AS build
+SHELL ["powershell", "-Command"]
+WORKDIR C:\app
+
+# Копируем monorepo
+COPY package.json package-lock.json* ./
+COPY apps ./apps
+
+# Установка зависимостей (root + workspaces)
+RUN npm ci --omit=dev ; \
+    npm --workspace apps/api ci ; \
+    npm --workspace apps/web ci
+
+# Сборка web
+RUN npm --workspace apps/web run build
+
+# Сборка api (ts -> js)
+RUN npm --workspace apps/api run build
+
+# Генерация Prisma Client под Windows
+RUN npx prisma --schema=apps/api/prisma/schema.prisma generate
+
+# Рантайм образ (можно nanoserver, но для надёжности — servercore)
+FROM node:20-windowsservercore-ltsc2022 AS runtime
+SHELL ["powershell", "-Command"]
+WORKDIR C:\app
+
+# Копируем собранные артефакты
+COPY --from=build C:\app\apps\api\dist C:\app\apps\api\dist
+COPY --from=build C:\app\apps\web\dist C:\app\apps\web\dist
+COPY --from=build C:\app\apps\api\package.json C:\app\apps\api\package.json
+COPY --from=build C:\app\package.json C:\app\package.json
+COPY --from=build C:\app\apps\api\prisma C:\app\apps\api\prisma
+
+# Копируем node_modules (с уже сгенерированным Prisma Client)
+COPY --from=build C:\app\node_modules C:\app\node_modules
+COPY --from=build C:\app\apps\api\node_modules C:\app\apps\api\node_modules
+
+# Производительная зачистка dev-зависимостей
+RUN npm prune --omit=dev ; \
+    npm --workspace apps/api prune --omit=dev
+
+# Порт и переменные
+ENV NODE_ENV=production
+ENV API_PORT=5050
+ENV TELEGRAM_BOT_TOKEN=""
+ENV TELEGRAM_CHAT_ID=""
+
+EXPOSE 5050
+
+CMD ["node", "apps/api/dist/index.js"]

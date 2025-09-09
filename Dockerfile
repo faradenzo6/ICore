@@ -5,14 +5,14 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY apps ./apps
 
-# Install root deps and workspace deps
-RUN npm ci --omit=dev && npm --workspace apps/api ci && npm --workspace apps/web ci
+# Build deps for native modules (e.g., bcrypt)
+RUN apk add --no-cache --virtual .gyp python3 make g++
 
-# Build web
-RUN npm --workspace apps/web run build
+# Install deps for all workspaces (dev deps included)
+RUN npm ci
 
-# Build api (ts -> js)
-RUN npm --workspace apps/api run build
+# Build web+api via root script
+RUN npm run build
 
 # Generate Prisma Client in base and keep node_modules
 RUN npx --yes prisma --schema=apps/api/prisma/schema.prisma generate
@@ -34,6 +34,9 @@ COPY --from=base /app/apps/api/node_modules ./apps/api/node_modules
 
 # Ensure production prune to reduce size
 RUN npm prune --omit=dev && npm --workspace apps/api prune --omit=dev
+
+# Remove build tool meta if any (no effect in runtime stage, but keep stage clean)
+RUN true
 
 # Prisma client generate at runtime not needed (SQLite)
 ENV API_PORT=5050
