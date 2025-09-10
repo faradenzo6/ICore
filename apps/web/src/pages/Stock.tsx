@@ -29,6 +29,9 @@ export default function StockPage() {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [type, setType] = useState('');
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const [historyLimit] = useState(20);
 
   async function findProductIn() {
     const res = await apiFetch<{ items: Product[]; total: number; page: number; limit: number }>(`/api/products?search=${encodeURIComponent(queryIn)}&limit=100`);
@@ -56,7 +59,9 @@ export default function StockPage() {
     if (!productIn) return;
     await apiFetch('/api/stock/in', { method: 'POST', body: JSON.stringify({ productId: productIn.id, quantity: qtyIn, unitPrice: priceIn || undefined, salePrice: salePrice || undefined }) });
     alert('Поступление добавлено');
+    // Мгновенно обновляем данные
     loadMovements();
+    loadAllProducts();
     // Очищаем форму
     setQueryIn('');
     setProductIn(null);
@@ -69,7 +74,9 @@ export default function StockPage() {
     if (!productOut) return;
     await apiFetch('/api/stock/out', { method: 'POST', body: JSON.stringify({ productId: productOut.id, quantity: qtyOut, note: noteOut || undefined }) });
     alert('Списание выполнено');
+    // Мгновенно обновляем данные
     loadMovements();
+    loadAllProducts();
     // Очищаем форму
     setQueryOut('');
     setProductOut(null);
@@ -82,8 +89,11 @@ export default function StockPage() {
     if (from) qs.set('from', from);
     if (to) qs.set('to', to);
     if (type) qs.set('type', type);
-    const data = await apiFetch<Movement[]>(`/api/stock/movements?${qs.toString()}`);
-    setMovements(data);
+    qs.set('page', String(historyPage));
+    qs.set('limit', String(historyLimit));
+    const data = await apiFetch<{ items: Movement[]; total: number; page: number; limit: number }>(`/api/stock/movements?${qs.toString()}`);
+    setMovements(data.items);
+    setHistoryTotal(data.total);
   }
 
   async function loadAllProducts() {
@@ -91,7 +101,7 @@ export default function StockPage() {
     setAllProducts(res.items);
   }
 
-  useEffect(() => { loadMovements(); }, []);
+  useEffect(() => { loadMovements(); }, [historyPage, from, to, type]);
   useEffect(() => {
     loadAllProducts();
   }, []);
@@ -257,8 +267,8 @@ export default function StockPage() {
               <option value="ADJUST">Корректировка</option>
             </select>
           </div>
-          <button className="btn" onClick={loadMovements}>Показать</button>
-          <button className="px-3 py-2 rounded border border-neutral-700 hover:bg-[#242834]" onClick={() => { setFrom(''); setTo(''); setType(''); loadMovements(); }}>Сбросить</button>
+          <button className="btn" onClick={() => { setHistoryPage(1); loadMovements(); }}>Показать</button>
+          <button className="px-3 py-2 rounded border border-neutral-700 hover:bg-[#242834]" onClick={() => { setFrom(''); setTo(''); setType(''); setHistoryPage(1); loadMovements(); }}>Сбросить</button>
         </div>
 
         <div className="overflow-auto">
@@ -289,6 +299,34 @@ export default function StockPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Пагинация для истории */}
+        {historyTotal > historyLimit && (
+          <div className="flex items-center justify-between pt-3 border-t border-neutral-800">
+            <div className="text-sm text-neutral-400">
+              Показано {((historyPage - 1) * historyLimit) + 1}-{Math.min(historyPage * historyLimit, historyTotal)} из {historyTotal}
+            </div>
+            <div className="flex gap-2">
+              <button 
+                className="px-3 py-1 rounded border border-neutral-700 hover:bg-[#242834] disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => setHistoryPage(prev => Math.max(1, prev - 1))}
+                disabled={historyPage === 1}
+              >
+                Назад
+              </button>
+              <span className="px-3 py-1 text-sm">
+                Страница {historyPage} из {Math.ceil(historyTotal / historyLimit)}
+              </span>
+              <button 
+                className="px-3 py-1 rounded border border-neutral-700 hover:bg-[#242834] disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => setHistoryPage(prev => Math.min(Math.ceil(historyTotal / historyLimit), prev + 1))}
+                disabled={historyPage >= Math.ceil(historyTotal / historyLimit)}
+              >
+                Вперед
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

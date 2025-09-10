@@ -56,7 +56,7 @@ router.post('/in', authGuard, requireRole('ADMIN'), async (req, res) => {
         productId,
         type: 'IN',
         quantity: effectiveQty,
-        unitPrice: null, // для поступлений продажная цена не фиксируется
+        unitPrice: salePrice !== undefined ? Number(salePrice) : null, // сохраняем цену продажи если указана
         unitCost: costPerUnit ?? null,
         note,
         userId,
@@ -102,7 +102,7 @@ router.post('/out', authGuard, requireRole('ADMIN'), async (req, res) => {
 });
 
 router.get('/movements', authGuard, async (req, res) => {
-  const { from, to, type, productId } = req.query as Record<string, string>;
+  const { from, to, type, productId, page = '1', limit = '20' } = req.query as Record<string, string>;
   const where: any = {};
   if (from || to) {
     where.createdAt = {};
@@ -111,8 +111,23 @@ router.get('/movements', authGuard, async (req, res) => {
   }
   if (type) where.type = type;
   if (productId) where.productId = Number(productId);
-  const items = await prisma.stockMovement.findMany({ where, orderBy: { createdAt: 'desc' }, include: { product: true, user: true } });
-  res.json(items);
+  
+  const pageNum = Math.max(1, Number(page));
+  const limitNum = Math.max(1, Math.min(100, Number(limit)));
+  const skip = (pageNum - 1) * limitNum;
+  
+  const [items, total] = await Promise.all([
+    prisma.stockMovement.findMany({ 
+      where, 
+      orderBy: { createdAt: 'desc' }, 
+      include: { product: true, user: true },
+      skip,
+      take: limitNum
+    }),
+    prisma.stockMovement.count({ where })
+  ]);
+  
+  res.json({ items, total, page: pageNum, limit: limitNum });
 });
 
 

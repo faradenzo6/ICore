@@ -75,7 +75,7 @@ export default function Products() {
         </select>
         {/* Кнопки справа после селектов */}
         <div className="flex gap-2 ml-auto">
-          {canCreate && <CreateProduct onCreated={() => setPage(1)} categories={categories} />}
+          {canCreate && <CreateProduct onCreated={() => { setPage(1); loadProducts(); }} categories={categories} />}
           {canCreate && <ManageCategories />}
         </div>
       </div>
@@ -100,7 +100,7 @@ export default function Products() {
                 <td className="p-2">{p.isActive ? 'Активен' : 'Скрыт'}</td>
                 {canCreate && (
                   <td className="p-2 space-x-2">
-                    <EditProduct product={p} categories={categories} onUpdated={() => setPage(1)} />
+                    <EditProduct product={p} categories={categories} onUpdated={() => { setPage(1); loadProducts(); }} />
                     <button className="btn" onClick={async () => {
                       if (!confirm('Удалить товар?')) return;
                       try {
@@ -113,6 +113,7 @@ export default function Products() {
                         toast.error(msg);
                         // откат: перезагрузка страницы данных
                         setPage(1);
+                        loadProducts();
                       }
                     }}>Удалить</button>
                   </td>

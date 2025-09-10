@@ -128,20 +128,41 @@ router.post('/', authGuard, requireRole('ADMIN', 'STAFF'), async (req, res) => {
         const token = process.env.TELEGRAM_BOT_TOKEN || '8475679792:AAHVGHAfx3hIoSPOPMAqcJSnkOlbHpzgJzs';
         const chatId = process.env.TELEGRAM_CHAT_ID || '-4614810639';
         if (token && chatId) {
-          const productsAfter = await tx.product.findMany({ where: { id: { in: ids } } });
+          const productsAfter = await tx.product.findMany({ 
+            where: { id: { in: ids } },
+            include: { 
+              bunComponent: true, 
+              sausageComponent: true 
+            }
+          });
           const byIdAfter = new Map(productsAfter.map((p) => [p.id, p]));
           const seller = await tx.user.findUnique({ where: { id: userId }, select: { username: true } });
           const now = new Date().toLocaleString('ru-RU');
+          
           for (const it of items) {
             const p = byIdAfter.get(it.productId);
             if (!p) continue;
-            const remainder = p.isComposite ? '—' : String(p.stock);
-            const text = `<b>${p.name}</b>\n` +
-              `Количество: <b>${it.quantity}</b>\n` +
-              `Цена продажи: <b>${Number(it.unitPrice).toLocaleString('ru-RU')}</b>\n` +
-              `Дата и время продажи: <b>${now}</b>\n` +
-              `Логин продавшего: <b>${seller?.username ?? ''}</b>\n` +
-              `Остаток проданного товара: <b>${remainder}</b>`;
+            
+            let text = `🛒 <b>${p.name}</b>\n` +
+              `📦 Количество: <b>${it.quantity}</b>\n` +
+              `💰 Цена продажи: <b>${Number(it.unitPrice).toLocaleString('ru-RU')} UZS</b>\n` +
+              `📅 Дата и время продажи: <b>${now}</b>\n` +
+              `👤 Логин продавшего: <b>${seller?.username ?? ''}</b>\n`;
+            
+            if (p.isComposite) {
+              text += `📊 Остаток проданного товара: <b>—</b>\n`;
+              
+              // Добавляем информацию об остатках компонентов для хот-догов
+              if (p.bunComponent) {
+                text += `🥖 Остаток лепёшек: <b>${p.bunComponent.stock}</b>\n`;
+              }
+              if (p.sausageComponent) {
+                text += `🌭 Остаток сосисок: <b>${p.sausageComponent.stock}</b>\n`;
+              }
+            } else {
+              text += `📊 Остаток проданного товара: <b>${p.stock}</b>\n`;
+            }
+            
             const url = `https://api.telegram.org/bot${token}/sendMessage`;
             await (globalThis as any).fetch(url, {
               method: 'POST',
