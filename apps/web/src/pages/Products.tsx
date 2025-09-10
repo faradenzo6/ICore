@@ -29,7 +29,17 @@ export default function Products() {
     qs.set('page', String(page));
     qs.set('limit', String(limit));
     const res = await apiFetch<{ items: Product[]; total: number; page: number; limit: number } | null>('/api/products?' + qs.toString());
-    setItems(res);
+    
+    // Если есть поиск, фильтруем результаты на фронтенде для нечувствительного к регистру поиска
+    if (res && search) {
+      const filtered = res.items.filter(p => 
+        p.name.toLowerCase().includes(search.toLowerCase()) || 
+        p.sku.toLowerCase().includes(search.toLowerCase())
+      );
+      setItems({ ...res, items: filtered });
+    } else {
+      setItems(res);
+    }
   };
 
   useEffect(() => {

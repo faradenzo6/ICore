@@ -55,8 +55,13 @@ export default function SalesNew() {
   useEffect(() => {
     const t = setTimeout(async () => {
       if (!query.trim()) { setSuggestions([]); return; }
-      const res = await apiFetch<{ items: Product[]; total: number; page: number; limit: number }>(`/api/products?search=${encodeURIComponent(query)}&limit=5`);
-      setSuggestions(res.items);
+      const res = await apiFetch<{ items: Product[]; total: number; page: number; limit: number }>(`/api/products?search=${encodeURIComponent(query)}&limit=100`);
+      // Фильтруем на фронтенде для нечувствительного к регистру поиска
+      const filtered = res.items.filter(p =>
+        p.name.toLowerCase().includes(query.toLowerCase()) ||
+        p.sku.toLowerCase().includes(query.toLowerCase())
+      );
+      setSuggestions(filtered);
     }, 200);
     return () => clearTimeout(t);
   }, [query]);
@@ -70,12 +75,12 @@ export default function SalesNew() {
           setTimeout(() => setSuggestions([]), 100);
         }}>
           <input value={query} onFocus={async () => {
-            // Автофокуса при входе нет, но при фокусе показываем список как раньше
-            const res = await apiFetch<{ items: Product[]; total: number; page: number; limit: number }>(`/api/products?limit=5`);
+            // При фокусе показываем все товары
+            const res = await apiFetch<{ items: Product[]; total: number; page: number; limit: number }>(`/api/products?limit=100`);
             setSuggestions(res.items);
           }} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { addByName(query); setQuery(''); setSuggestions([]); } }} placeholder="Поиск товара" className="p-2 rounded bg-[#11161f] border border-neutral-700 w-full" />
           {suggestions.length > 0 && (
-            <div className="absolute z-10 mt-1 w-full max-h-60 overflow-auto bg-[#1E222B] border border-neutral-700 rounded">
+            <div className="absolute z-10 mt-1 w-full max-h-60 overflow-auto bg-[#1E222B] border border-neutral-700 rounded shadow-lg">
               {suggestions.map((p) => (
                 <div key={p.id} className="px-3 py-2 hover:bg-[#2a2f3a] cursor-pointer" onClick={() => { addByName(p.name); setQuery(''); setSuggestions([]); }}>
                   {p.name}
@@ -114,6 +119,7 @@ export default function SalesNew() {
           </tbody>
         </table>
       </div>
+
 
       <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
         <div className="flex items-center gap-2">

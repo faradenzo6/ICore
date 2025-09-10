@@ -6,9 +6,16 @@ type Product = { id: number; name: string; sku: string; stock?: number };
 type Movement = { id: number; product: Product; type: string; quantity: number; unitPrice?: number|null; unitCost?: number|null; note?: string|null; createdAt: string };
 
 export default function StockPage() {
-  const [query, setQuery] = useState('');
-  const [product, setProduct] = useState<Product | null>(null);
-  const [suggestions, setSuggestions] = useState<Product[]>([]);
+  // Поиск для добавления товаров
+  const [queryIn, setQueryIn] = useState('');
+  const [productIn, setProductIn] = useState<Product | null>(null);
+  const [suggestionsIn, setSuggestionsIn] = useState<Product[]>([]);
+  
+  // Поиск для списания товаров
+  const [queryOut, setQueryOut] = useState('');
+  const [productOut, setProductOut] = useState<Product | null>(null);
+  const [suggestionsOut, setSuggestionsOut] = useState<Product[]>([]);
+  
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [qtyIn, setQtyIn] = useState(1);
   const [priceIn, setPriceIn] = useState<number | ''>('');
@@ -23,24 +30,50 @@ export default function StockPage() {
   const [to, setTo] = useState('');
   const [type, setType] = useState('');
 
-  async function findProduct() {
-    const res = await apiFetch<{ items: Product[]; total: number; page: number; limit: number }>(`/api/products?search=${encodeURIComponent(query)}&limit=5`);
-    setSuggestions(res.items);
-    setProduct(res.items[0] || null);
+  async function findProductIn() {
+    const res = await apiFetch<{ items: Product[]; total: number; page: number; limit: number }>(`/api/products?search=${encodeURIComponent(queryIn)}&limit=100`);
+    // Фильтруем результаты на фронтенде для нечувствительного к регистру поиска
+    const filtered = res.items.filter(p => 
+      p.name.toLowerCase().includes(queryIn.toLowerCase()) || 
+      p.sku.toLowerCase().includes(queryIn.toLowerCase())
+    );
+    setSuggestionsIn(filtered);
+    setProductIn(filtered[0] || null);
+  }
+
+  async function findProductOut() {
+    const res = await apiFetch<{ items: Product[]; total: number; page: number; limit: number }>(`/api/products?search=${encodeURIComponent(queryOut)}&limit=100`);
+    // Фильтруем результаты на фронтенде для нечувствительного к регистру поиска
+    const filtered = res.items.filter(p => 
+      p.name.toLowerCase().includes(queryOut.toLowerCase()) || 
+      p.sku.toLowerCase().includes(queryOut.toLowerCase())
+    );
+    setSuggestionsOut(filtered);
+    setProductOut(filtered[0] || null);
   }
 
   async function doIn() {
-    if (!product) return;
-    await apiFetch('/api/stock/in', { method: 'POST', body: JSON.stringify({ productId: product.id, quantity: qtyIn, unitPrice: priceIn || undefined, salePrice: salePrice || undefined }) });
+    if (!productIn) return;
+    await apiFetch('/api/stock/in', { method: 'POST', body: JSON.stringify({ productId: productIn.id, quantity: qtyIn, unitPrice: priceIn || undefined, salePrice: salePrice || undefined }) });
     alert('Поступление добавлено');
     loadMovements();
+    // Очищаем форму
+    setQueryIn('');
+    setProductIn(null);
+    setSuggestionsIn([]);
+    setPriceIn('');
+    setSalePrice('');
   }
 
   async function doOut() {
-    if (!product) return;
-    await apiFetch('/api/stock/out', { method: 'POST', body: JSON.stringify({ productId: product.id, quantity: qtyOut, note: noteOut || undefined }) });
+    if (!productOut) return;
+    await apiFetch('/api/stock/out', { method: 'POST', body: JSON.stringify({ productId: productOut.id, quantity: qtyOut, note: noteOut || undefined }) });
     alert('Списание выполнено');
     loadMovements();
+    // Очищаем форму
+    setQueryOut('');
+    setProductOut(null);
+    setSuggestionsOut([]);
     setNoteOut('');
   }
 
@@ -74,22 +107,40 @@ export default function StockPage() {
       <h1 className="text-2xl font-semibold">Склад</h1>
 
       <div className="card p-4 grid gap-3 md:grid-cols-6 items-end">
-        <div className="md:col-span-2 relative" onBlur={() => setTimeout(() => setSuggestions([]), 100)}>
-          <label className="block text-sm text-neutral-400 mb-1">Поиск товара (название)</label>
+        <div className="md:col-span-2 relative" onBlur={() => setTimeout(() => setSuggestionsIn([]), 100)}>
+          <label className="block text-sm text-neutral-400 mb-1">Поиск товара для добавления</label>
           <div className="flex gap-2">
-            <input value={query} onChange={async (e) => { setQuery(e.target.value); if (e.target.value.trim()) { const res = await apiFetch<{ items: Product[]; total: number; page: number; limit: number }>(`/api/products?search=${encodeURIComponent(e.target.value)}&limit=5`); setSuggestions(res.items); } else { setSuggestions([]); } }} onFocus={findProduct} placeholder="Введите название" className="w-full p-2 rounded bg-[#11161f] border border-neutral-700" />
-            <button className="btn" onClick={findProduct}>Найти</button>
+            <input 
+              value={queryIn} 
+              onChange={async (e) => { 
+                setQueryIn(e.target.value); 
+                if (e.target.value.trim()) { 
+                  const res = await apiFetch<{ items: Product[]; total: number; page: number; limit: number }>(`/api/products?search=${encodeURIComponent(e.target.value)}&limit=100`); 
+                  // Фильтруем результаты на фронтенде для нечувствительного к регистру поиска
+                  const filtered = res.items.filter(p => 
+                    p.name.toLowerCase().includes(e.target.value.toLowerCase()) || 
+                    p.sku.toLowerCase().includes(e.target.value.toLowerCase())
+                  );
+                  setSuggestionsIn(filtered); 
+                } else { 
+                  setSuggestionsIn([]); 
+                } 
+              }} 
+              onFocus={findProductIn} 
+              placeholder="Введите название" 
+              className="w-full p-2 rounded bg-[#11161f] border border-neutral-700" 
+            />
+            <button className="btn" onClick={findProductIn}>Найти</button>
           </div>
-          {suggestions.length > 0 && (
+          {suggestionsIn.length > 0 && (
             <div className="absolute z-50 mt-1 w-full max-h-60 overflow-auto bg-[#1E222B] border border-neutral-700 rounded shadow-lg">
-              {suggestions.map((p) => (
-                <div key={p.id} className="px-3 py-2 hover:bg-[#2a2f3a] cursor-pointer" onClick={() => { setProduct(p); setQuery(`${p.name}`); setSuggestions([]); }}>
-                  {p.name} <span className="text-neutral-400">({p.sku})</span>
+              {suggestionsIn.map((p) => (
+                <div key={p.id} className="px-3 py-2 hover:bg-[#2a2f3a] cursor-pointer" onClick={() => { setProductIn(p); setQueryIn(`${p.name}`); setSuggestionsIn([]); }}>
+                  {p.name}
                 </div>
               ))}
             </div>
           )}
-          {/* Отображение выбранного товара в отдельной строке убрано для стабильной сетки */}
         </div>
         <div>
           <label className="block text-sm text-neutral-400 mb-1">Поступление: кол-во</label>
@@ -104,23 +155,42 @@ export default function StockPage() {
           <input type="number" value={salePrice} onChange={(e) => setSalePrice(e.target.value ? Number(e.target.value) : '')} className="w-full p-2 rounded bg-[#11161f] border border-neutral-700" />
         </div>
         <div className="md:col-span-1 flex items-end">
-          <button className="btn w-full" onClick={doIn} disabled={!product}>Добавить</button>
+          <button className="btn w-full" onClick={doIn} disabled={!productIn}>Добавить</button>
         </div>
       </div>
 
       {/* Блок списания товаров */}
-      <div className="card p-4 grid gap-3 md:grid-cols-4 items-end">
-        <div className="md:col-span-2 relative">
-          <label className="block text-sm text-neutral-400 mb-1">Товар для списания</label>
+      <div className="card p-4 grid gap-3 md:grid-cols-6 items-end">
+        <div className="md:col-span-2 relative" onBlur={() => setTimeout(() => setSuggestionsOut([]), 100)}>
+          <label className="block text-sm text-neutral-400 mb-1">Поиск товара для списания</label>
           <div className="flex gap-2">
-            <input value={query} onChange={async (e) => { setQuery(e.target.value); if (e.target.value.trim()) { const res = await apiFetch<{ items: Product[]; total: number; page: number; limit: number }>(`/api/products?search=${encodeURIComponent(e.target.value)}&limit=5`); setSuggestions(res.items); } else { setSuggestions([]); } }} onFocus={findProduct} placeholder="Введите название" className="w-full p-2 rounded bg-[#11161f] border border-neutral-700" />
-            <button className="btn" onClick={findProduct}>Найти</button>
+            <input 
+              value={queryOut} 
+              onChange={async (e) => { 
+                setQueryOut(e.target.value); 
+                if (e.target.value.trim()) { 
+                  const res = await apiFetch<{ items: Product[]; total: number; page: number; limit: number }>(`/api/products?search=${encodeURIComponent(e.target.value)}&limit=100`); 
+                  // Фильтруем результаты на фронтенде для нечувствительного к регистру поиска
+                  const filtered = res.items.filter(p => 
+                    p.name.toLowerCase().includes(e.target.value.toLowerCase()) || 
+                    p.sku.toLowerCase().includes(e.target.value.toLowerCase())
+                  );
+                  setSuggestionsOut(filtered); 
+                } else { 
+                  setSuggestionsOut([]); 
+                } 
+              }} 
+              onFocus={findProductOut} 
+              placeholder="Введите название" 
+              className="w-full p-2 rounded bg-[#11161f] border border-neutral-700" 
+            />
+            <button className="btn" onClick={findProductOut}>Найти</button>
           </div>
-          {suggestions.length > 0 && (
+          {suggestionsOut.length > 0 && (
             <div className="absolute z-50 mt-1 w-full max-h-60 overflow-auto bg-[#1E222B] border border-neutral-700 rounded shadow-lg">
-              {suggestions.map((p) => (
-                <div key={p.id} className="px-3 py-2 hover:bg-[#2a2f3a] cursor-pointer" onClick={() => { setProduct(p); setQuery(`${p.name}`); setSuggestions([]); }}>
-                  {p.name} <span className="text-neutral-400">({p.sku})</span>
+              {suggestionsOut.map((p) => (
+                <div key={p.id} className="px-3 py-2 hover:bg-[#2a2f3a] cursor-pointer" onClick={() => { setProductOut(p); setQueryOut(`${p.name}`); setSuggestionsOut([]); }}>
+                  {p.name}
                 </div>
               ))}
             </div>
@@ -134,8 +204,9 @@ export default function StockPage() {
           <label className="block text-sm text-neutral-400 mb-1">Причина списания</label>
           <input value={noteOut} onChange={(e) => setNoteOut(e.target.value)} placeholder="Например: порча, утеря" className="w-full p-2 rounded bg-[#11161f] border border-neutral-700" />
         </div>
+        <div></div>
         <div className="md:col-span-1 flex items-end">
-          <button className="btn w-full bg-red-600 hover:bg-red-700" onClick={doOut} disabled={!product}>Списать</button>
+          <button className="btn w-full bg-red-600 hover:bg-red-700" onClick={doOut} disabled={!productOut}>Списать</button>
         </div>
       </div>
 
@@ -181,6 +252,7 @@ export default function StockPage() {
             <select value={type} onChange={(e) => setType(e.target.value)} className="p-2 rounded bg-[#11161f] border border-neutral-700">
               <option value="">Все</option>
               <option value="IN">Поступление</option>
+              <option value="SALE">Продажа</option>
               <option value="OUT">Списание</option>
               <option value="ADJUST">Корректировка</option>
             </select>
@@ -207,11 +279,11 @@ export default function StockPage() {
                 <tr key={m.id} className="border-t border-neutral-800">
                   <td className="p-2">{new Date(m.createdAt).toLocaleString('ru-RU')}</td>
                   <td className="p-2">{m.product.name}</td>
-                  <td className="p-2">{m.type === 'IN' ? 'Поступление' : m.type === 'OUT' ? 'Продажа' : 'Корректировка'}</td>
+                  <td className="p-2">{m.type === 'IN' ? 'Поступление' : m.type === 'OUT' ? 'Списание' : m.type === 'SALE' ? 'Продажа' : 'Корректировка'}</td>
                   <td className="p-2">{m.quantity}</td>
                   <td className="p-2">{m.unitCost ? formatUZS(Number(m.unitCost)) : ''}</td>
                   <td className="p-2">{m.unitPrice ? formatUZS(Number(m.unitPrice)) : ''}</td>
-                  <td className="p-2">{m.type === 'OUT' && m.unitPrice != null && m.unitCost != null ? formatUZS((Number(m.unitPrice) - Number(m.unitCost)) * m.quantity) : ''}</td>
+                  <td className="p-2">{(m.type === 'SALE' || m.type === 'OUT') && m.unitPrice != null && m.unitCost != null ? formatUZS((Number(m.unitPrice) - Number(m.unitCost)) * m.quantity) : ''}</td>
                 </tr>
               ))}
             </tbody>

@@ -114,7 +114,7 @@ router.post('/', authGuard, requireRole('ADMIN', 'STAFF'), async (req, res) => {
         tx.stockMovement.createMany({
           data: items.map((it) => ({
             productId: it.productId,
-            type: 'OUT',
+            type: 'SALE',
             quantity: it.quantity,
             unitPrice: it.unitPrice,
             unitCost: productCostById.get(it.productId) ?? null,
