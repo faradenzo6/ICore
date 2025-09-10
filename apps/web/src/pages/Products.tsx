@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { apiFetch, getMe, User } from '../lib/api';
 import { toast } from 'sonner';
+import { useAutoRefresh } from '../hooks/useAutoRefresh';
 
 type Category = { id: number; name: string };
 type Product = { id: number; name: string; sku: string; categoryId: number|null; price: number; costPrice?: number; stock: number; isActive: boolean; category?: { id: number; name: string } };
@@ -20,15 +21,23 @@ export default function Products() {
     apiFetch<Category[]>('/api/categories').then(setCategories);
   }, []);
 
-  useEffect(() => {
+  const loadProducts = async () => {
     const qs = new URLSearchParams();
     if (search) qs.set('search', search);
     if (category) qs.set('category', String(category));
     if (active !== 'all') qs.set('active', String(active === 'true'));
     qs.set('page', String(page));
     qs.set('limit', String(limit));
-    apiFetch<{ items: Product[]; total: number; page: number; limit: number } | null>('/api/products?' + qs.toString()).then((res) => setItems(res));
+    const res = await apiFetch<{ items: Product[]; total: number; page: number; limit: number } | null>('/api/products?' + qs.toString());
+    setItems(res);
+  };
+
+  useEffect(() => {
+    loadProducts();
   }, [search, category, page, active, limit]);
+
+  // Автоматическое обновление каждые 30 секунд
+  useAutoRefresh(loadProducts, 30000);
 
   const canCreate = me?.role === 'ADMIN';
 

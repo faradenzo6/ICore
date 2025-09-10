@@ -1,4 +1,6 @@
 import 'dotenv/config';
+// Устанавливаем часовой пояс для приложения
+process.env.TZ = 'Asia/Tashkent';
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
