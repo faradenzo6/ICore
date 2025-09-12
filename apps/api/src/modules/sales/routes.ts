@@ -4,6 +4,94 @@ import { prisma } from '../../lib/prisma';
 import { authGuard, requireRole } from '../../middlewares/auth';
 import { toCsv } from '../../utils/csv';
 
+// Полифилл для fetch в старых версиях Node.js
+if (!globalThis.fetch) {
+  globalThis.fetch = require('node-fetch');
+}
+
+// Функция для отправки уведомлений в Telegram
+async function sendTelegramNotification(saleId: number, items: any[], userId: number) {
+  try {
+    const token = process.env.TELEGRAM_BOT_TOKEN || '8475679792:AAHVGHAfx3hIoSPOPMAqcJSnkOlbHpzgJzs';
+    const chatId = process.env.TELEGRAM_CHAT_ID || '-4614810639';
+    
+    if (!token || !chatId) {
+      console.log('[telegram] Токен или chat_id не настроены');
+      return;
+    }
+
+    // Получаем данные о продаже и товарах
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      include: {
+        user: { select: { username: true } },
+        items: {
+          include: {
+            product: {
+              include: {
+                bunComponent: true,
+                sausageComponent: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!sale) {
+      console.error('[telegram] Продажа не найдена:', saleId);
+      return;
+    }
+
+    const now = new Date().toLocaleString('ru-RU');
+    
+    // Отправляем уведомление для каждого товара
+    for (const item of sale.items) {
+      const product = item.product;
+      
+      let text = `🛒 <b>${product.name}</b>\n` +
+        `📦 Количество: <b>${item.quantity}</b>\n` +
+        `💰 Цена продажи: <b>${Number(item.unitPrice).toLocaleString('ru-RU')} UZS</b>\n` +
+        `📅 Дата и время продажи: <b>${now}</b>\n` +
+        `👤 Логин продавшего: <b>${sale.user?.username ?? ''}</b>\n`;
+      
+      if (product.isComposite) {
+        text += `📊 Остаток проданного товара: <b>—</b>\n`;
+        
+        // Добавляем информацию об остатках компонентов для хот-догов
+        if (product.bunComponent) {
+          text += `🥖 Остаток лепёшек: <b>${product.bunComponent.stock}</b>\n`;
+        }
+        if (product.sausageComponent) {
+          text += `🌭 Остаток сосисок: <b>${product.sausageComponent.stock}</b>\n`;
+        }
+      } else {
+        text += `📊 Остаток проданного товара: <b>${product.stock}</b>\n`;
+      }
+      
+      const url = `https://api.telegram.org/bot${token}/sendMessage`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          chat_id: chatId, 
+          text, 
+          parse_mode: 'HTML', 
+          disable_web_page_preview: true 
+        }),
+      });
+
+      if (!response.ok) {
+        console.error('[telegram] Ошибка отправки сообщения:', response.status, response.statusText);
+      }
+    }
+    
+    console.log('[telegram] Уведомления отправлены для продажи:', saleId);
+  } catch (error) {
+    console.error('[telegram] Ошибка отправки уведомлений:', error);
+  }
+}
+
 export const router = Router();
 
 const saleSchema = z.object({
@@ -123,59 +211,14 @@ router.post('/', authGuard, requireRole('ADMIN', 'STAFF'), async (req, res) => {
         }),
       ]);
 
-      // Telegram-уведомления о продаже (каждая позиция отдельным сообщением)
-      try {
-        const token = process.env.TELEGRAM_BOT_TOKEN || '8475679792:AAHVGHAfx3hIoSPOPMAqcJSnkOlbHpzgJzs';
-        const chatId = process.env.TELEGRAM_CHAT_ID || '-4614810639';
-        if (token && chatId) {
-          const productsAfter = await tx.product.findMany({ 
-            where: { id: { in: ids } },
-            include: { 
-              bunComponent: true, 
-              sausageComponent: true 
-            }
-          });
-          const byIdAfter = new Map(productsAfter.map((p) => [p.id, p]));
-          const seller = await tx.user.findUnique({ where: { id: userId }, select: { username: true } });
-          const now = new Date().toLocaleString('ru-RU');
-          
-          for (const it of items) {
-            const p = byIdAfter.get(it.productId);
-            if (!p) continue;
-            
-            let text = `🛒 <b>${p.name}</b>\n` +
-              `📦 Количество: <b>${it.quantity}</b>\n` +
-              `💰 Цена продажи: <b>${Number(it.unitPrice).toLocaleString('ru-RU')} UZS</b>\n` +
-              `📅 Дата и время продажи: <b>${now}</b>\n` +
-              `👤 Логин продавшего: <b>${seller?.username ?? ''}</b>\n`;
-            
-            if (p.isComposite) {
-              text += `📊 Остаток проданного товара: <b>—</b>\n`;
-              
-              // Добавляем информацию об остатках компонентов для хот-догов
-              if (p.bunComponent) {
-                text += `🥖 Остаток лепёшек: <b>${p.bunComponent.stock}</b>\n`;
-              }
-              if (p.sausageComponent) {
-                text += `🌭 Остаток сосисок: <b>${p.sausageComponent.stock}</b>\n`;
-              }
-            } else {
-              text += `📊 Остаток проданного товара: <b>${p.stock}</b>\n`;
-            }
-            
-            const url = `https://api.telegram.org/bot${token}/sendMessage`;
-            await (globalThis as any).fetch(url, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true }),
-            });
-          }
-        }
-      } catch (e) {
-        console.error('[telegram] notify failed', e);
-      }
 
       return sale;
+    });
+
+    // Отправляем уведомления в Telegram после успешной продажи
+    // Выполняем асинхронно, чтобы не блокировать ответ клиенту
+    sendTelegramNotification(result.id, items, userId).catch(error => {
+      console.error('[telegram] Критическая ошибка отправки уведомлений:', error);
     });
 
     return res.status(201).json({ id: result.id });
