@@ -26,7 +26,7 @@ router.post('/in', authGuard, requireRole('ADMIN'), async (req, res) => {
 
   const userId = req.user!.userId;
 
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx: any) => {
     const existing = await tx.product.findUnique({ where: { id: productId }, include: { category: true } });
     if (!existing) throw new Error('Товар не найден');
 
@@ -75,7 +75,7 @@ router.post('/out', authGuard, requireRole('ADMIN'), async (req, res) => {
 
   const userId = req.user!.userId;
 
-  const result = await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx: any) => {
     const product = await tx.product.findUnique({ where: { id: productId } });
     if (!product) throw new Error('Товар не найден');
     if (product.stock - quantity < 0) {

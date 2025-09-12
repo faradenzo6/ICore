@@ -114,16 +114,16 @@ router.post('/', authGuard, requireRole('ADMIN', 'STAFF'), async (req, res) => {
     const { items, discount = 0, paymentMethod } = parsed.data;
     const userId = req.user!.userId;
 
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       // Validate stock in bulk (с учётом составных товаров)
       const ids = Array.from(new Set(items.map((i) => i.productId)));
       const products = await tx.product.findMany({
         where: { id: { in: ids } },
         include: { bunComponent: true, sausageComponent: true },
       });
-      const byId = new Map(products.map((p) => [p.id, p]));
+      const byId = new Map(products.map((p: any) => [p.id, p]));
       for (const it of items) {
-        const product = byId.get(it.productId);
+        const product = byId.get(it.productId) as any;
         if (!product) throw Object.assign(new Error('Товар не найден'), { status: 404 });
         if (product.isComposite) {
           if (!product.bunComponent || !product.sausageComponent) {
@@ -185,7 +185,7 @@ router.post('/', authGuard, requireRole('ADMIN', 'STAFF'), async (req, res) => {
       // Обновляем склад (для составных — списываем компоненты)
       const stockOps: Promise<any>[] = [];
       for (const it of items) {
-        const product = byId.get(it.productId)!;
+        const product = byId.get(it.productId)! as any;
         if (product.isComposite && product.bunComponentId && product.sausageComponentId) {
           const sausagesPerUnit = product.sausagesPerUnit || 1;
           stockOps.push(
@@ -248,7 +248,7 @@ router.get('/', authGuard, async (req, res) => {
 // Экспорт Excel/CSV должен идти ДО роутов с :id, иначе захватывается как id
 router.get('/export.csv', authGuard, async (_req, res) => {
   const items = await prisma.sale.findMany({ orderBy: { createdAt: 'desc' }, include: { items: true, user: true } });
-  const rows = items.map((s) => ({
+  const rows = items.map((s: any) => ({
     id: s.id,
     userId: s.userId,
     total: s.total,
@@ -284,14 +284,14 @@ router.get('/export.xlsx', authGuard, async (_req, res) => {
     include: { user: true, items: { include: { product: true } } },
   });
 
-  sales.forEach((s) => {
+  sales.forEach((s: any) => {
     const mapPay = (p?: string | null) => (p === 'cash' ? 'Наличные' : p === 'card' ? 'Картой' : '');
-    const before = s.items.reduce((sum, it) => sum + Number(it.unitPrice) * it.quantity, 0);
-    const profit = s.items.reduce((sum, it: any) => {
+    const before = s.items.reduce((sum: any, it: any) => sum + Number(it.unitPrice) * it.quantity, 0);
+    const profit = s.items.reduce((sum: any, it: any) => {
       const unitCost = (it.product?.isComposite ? 0 : Number(it.unitCost ?? it.product?.costPrice ?? 0)) || 0;
       return sum + (Number(it.unitPrice) - unitCost) * it.quantity;
     }, 0);
-    const itemsText = s.items.map((it) => `${it.product.name} ×${it.quantity}`).join(', ');
+    const itemsText = s.items.map((it: any) => `${it.product.name} ×${it.quantity}`).join(', ');
     salesSheet.addRow({
       createdAt: s.createdAt,
       items: itemsText,
@@ -371,13 +371,13 @@ router.get('/:id/receipt.csv', authGuard, async (req, res) => {
   if (!sale) return res.status(404).json({ message: 'Не найдено' });
   const rows = [
     { Товар: 'Название', Цена: 'Цена', Количество: 'Кол-во', Сумма: 'Сумма' },
-    ...sale.items.map((i) => ({
+    ...sale.items.map((i: any) => ({
       Товар: i.product.name,
       Цена: i.unitPrice,
       Количество: i.quantity,
       Сумма: Number(i.unitPrice) * i.quantity,
     })),
-    { Товар: 'Итого до скидки', Цена: '', Количество: '', Сумма: sale.items.reduce((s, i) => s + Number(i.unitPrice) * i.quantity, 0) },
+    { Товар: 'Итого до скидки', Цена: '', Количество: '', Сумма: sale.items.reduce((s: any, i: any) => s + Number(i.unitPrice) * i.quantity, 0) },
     { Товар: 'Скидка', Цена: '', Количество: '', Сумма: sale.discount ?? 0 },
     { Товар: 'Итого', Цена: '', Количество: '', Сумма: Number(sale.total) },
   ];

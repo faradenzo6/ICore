@@ -160,7 +160,7 @@ router.get('/stock-export.xlsx', authGuard, async (_req, res) => {
     { header: 'Цена продажи', key: 'price', width: 16 },
   ];
   const items = await prisma.product.findMany({ orderBy: { name: 'asc' } });
-  items.forEach((p) => sheet.addRow({ name: p.name, stock: p.stock, cost: Number(p.costPrice), price: Number(p.price) }));
+  items.forEach((p: any) => sheet.addRow({ name: p.name, stock: p.stock, cost: Number(p.costPrice), price: Number(p.price) }));
   sheet.getRow(1).font = { bold: true };
   ;['cost','price'].forEach((k) => { (sheet.getColumn(k as any) as any).numFmt = '#,##0'; });
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

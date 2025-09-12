@@ -14,7 +14,7 @@ router.use(authGuard, requireRole('ADMIN'));
 
 router.get('/', async (_req, res) => {
   const users = await prisma.user.findMany({ orderBy: { createdAt: 'desc' } });
-  res.json(users.map(u => ({ id: u.id, username: u.username, role: u.role, createdAt: u.createdAt })));
+  res.json(users.map((u: any) => ({ id: u.id, username: u.username, role: u.role, createdAt: u.createdAt })));
 });
 
 router.post('/', async (req, res) => {
