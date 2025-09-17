@@ -3,21 +3,25 @@ import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
 import { authGuard, requireRole } from '../../middlewares/auth';
 import { toCsv } from '../../utils/csv';
-
-// Полифилл для fetch в старых версиях Node.js
-if (!globalThis.fetch) {
-  globalThis.fetch = require('node-fetch');
-}
+import { fetch, dispatcher } from '../../lib/http';
 
 // Функция для отправки уведомлений в Telegram
 async function sendTelegramNotification(saleId: number, items: any[], userId: number) {
   try {
     const token = process.env.TELEGRAM_BOT_TOKEN || '8475679792:AAHVGHAfx3hIoSPOPMAqcJSnkOlbHpzgJzs';
     const chatId = process.env.TELEGRAM_CHAT_ID || '-4614810639';
+    const httpsProxy = process.env.HTTPS_PROXY;
     
     if (!token || !chatId) {
       console.log('[telegram] Токен или chat_id не настроены');
       return;
+    }
+
+    console.log('[telegram] Начинаем отправку уведомлений для продажи:', saleId);
+    if (httpsProxy) {
+      console.log('[telegram] Используется прокси:', httpsProxy);
+    } else {
+      console.log('[telegram] Прокси не настроен, используется прямое подключение');
     }
 
     // Получаем данные о продаже и товарах
@@ -79,10 +83,14 @@ async function sendTelegramNotification(saleId: number, items: any[], userId: nu
           parse_mode: 'HTML', 
           disable_web_page_preview: true 
         }),
+        dispatcher,  // Используем dispatcher с поддержкой прокси
       });
 
       if (!response.ok) {
-        console.error('[telegram] Ошибка отправки сообщения:', response.status, response.statusText);
+        const errorText = await response.text();
+        console.error('[telegram] Ошибка отправки сообщения:', response.status, response.statusText, errorText);
+      } else {
+        console.log('[telegram] Сообщение успешно отправлено для товара:', product.name);
       }
     }
     
