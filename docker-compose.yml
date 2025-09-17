@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  arenapos:
+    build: .
+    container_name: arenapos
+    restart: always
+    ports:
+      - "5050:5050"
+    volumes:
+      - arenapos_data:/app/apps/api/prisma
+    environment:
+      - NODE_ENV=production
+      - API_PORT=5050
+      - JWT_SECRET=supersecret
+      - CORS_ORIGIN=https://arena.local
+      - TELEGRAM_BOT_TOKEN=8475679792:AAHVGHAfx3hIoSPOPMAqcJSnkOlbHpzgJzs
+      - TELEGRAM_CHAT_ID=-4614810639
+      - HTTPS_PROXY=
+    networks:
+      - arena-net
+
+volumes:
+  arenapos_data:
+
+networks:
+  arena-net:
+    driver: bridge

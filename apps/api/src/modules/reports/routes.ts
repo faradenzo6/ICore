@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../../lib/prisma';
 import { authGuard } from '../../middlewares/auth';
 import { toCsv } from '../../utils/csv';
+import { sendMonthlyReport } from '../../lib/telegram';
 
 export const router = Router();
 
@@ -167,6 +168,28 @@ router.get('/stock-export.xlsx', authGuard, async (_req, res) => {
   res.setHeader('Content-Disposition', 'attachment; filename="stock.xlsx"');
   await workbook.xlsx.write(res);
   res.end();
+});
+
+// Endpoint для отправки ежемесячного отчёта в Telegram
+router.post('/monthly-telegram', authGuard, async (req, res) => {
+  try {
+    await sendMonthlyReport();
+    res.json({ message: 'Ежемесячный отчёт отправлен в Telegram' });
+  } catch (error) {
+    console.error('[reports] Ошибка отправки ежемесячного отчёта:', error);
+    res.status(500).json({ message: 'Ошибка отправки отчёта' });
+  }
+});
+
+// Тестовый endpoint без авторизации для проверки
+router.post('/test-monthly-telegram', async (req, res) => {
+  try {
+    await sendMonthlyReport();
+    res.json({ message: 'Тестовый ежемесячный отчёт отправлен в Telegram' });
+  } catch (error) {
+    console.error('[reports] Ошибка отправки тестового отчёта:', error);
+    res.status(500).json({ message: 'Ошибка отправки отчёта' });
+  }
 });
 
 

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
 import { authGuard, requireRole } from '../../middlewares/auth';
+import { notifyStockIn, notifyStockOut } from '../../lib/telegram';
 
 export const router = Router();
 
@@ -65,6 +66,11 @@ router.post('/in', authGuard, requireRole('ADMIN'), async (req, res) => {
     return product;
   });
 
+  // Отправляем уведомление о поступлении
+  notifyStockIn(productId, quantity, unitPrice, userId).catch(error => {
+    console.error('[telegram] Ошибка уведомления о поступлении:', error);
+  });
+
   res.json(result);
 });
 
@@ -96,6 +102,11 @@ router.post('/out', authGuard, requireRole('ADMIN'), async (req, res) => {
       },
     });
     return updated;
+  });
+
+  // Отправляем уведомление о списании
+  notifyStockOut(productId, quantity, note, userId).catch(error => {
+    console.error('[telegram] Ошибка уведомления о списании:', error);
   });
 
   res.json(result);

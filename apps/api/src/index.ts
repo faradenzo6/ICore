@@ -19,6 +19,7 @@ import { router as uploadRouter } from './modules/upload/routes';
 import { router as usersRouter } from './modules/users/routes';
 import { authGuard } from './middlewares/auth';
 import { prisma } from './lib/prisma';
+import { startScheduler } from './lib/scheduler';
 
 const app = express();
 
@@ -78,6 +79,9 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 const port = Number(process.env.API_PORT || 5050);
 app.listen(port, () => {
   console.log(`API listening on http://localhost:${port}`);
+  
+  // Запускаем планировщик задач
+  startScheduler();
 });
 
 

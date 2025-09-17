@@ -3,26 +3,12 @@ import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
 import { authGuard, requireRole } from '../../middlewares/auth';
 import { toCsv } from '../../utils/csv';
-import { fetch, dispatcher } from '../../lib/http';
+import { sendTelegramMessage } from '../../lib/telegram';
 
-// Функция для отправки уведомлений в Telegram
+// Функция для отправки уведомлений о продажах в Telegram
 async function sendTelegramNotification(saleId: number, items: any[], userId: number) {
   try {
-    const token = process.env.TELEGRAM_BOT_TOKEN || '8475679792:AAHVGHAfx3hIoSPOPMAqcJSnkOlbHpzgJzs';
-    const chatId = process.env.TELEGRAM_CHAT_ID || '-4614810639';
-    const httpsProxy = process.env.HTTPS_PROXY;
-    
-    if (!token || !chatId) {
-      console.log('[telegram] Токен или chat_id не настроены');
-      return;
-    }
-
     console.log('[telegram] Начинаем отправку уведомлений для продажи:', saleId);
-    if (httpsProxy) {
-      console.log('[telegram] Используется прокси:', httpsProxy);
-    } else {
-      console.log('[telegram] Прокси не настроен, используется прямое подключение');
-    }
 
     // Получаем данные о продаже и товарах
     const sale = await prisma.sale.findUnique({
@@ -53,9 +39,12 @@ async function sendTelegramNotification(saleId: number, items: any[], userId: nu
     for (const item of sale.items) {
       const product = item.product;
       
-      let text = `🛒 <b>${product.name}</b>\n` +
+      const totalPrice = Number(item.unitPrice) * item.quantity;
+      let text = `🛒 <b>ПРОДАЖА</b>\n` +
+        `🛍️ Товар: <b>${product.name}</b>\n` +
         `📦 Количество: <b>${item.quantity}</b>\n` +
-        `💰 Цена продажи: <b>${Number(item.unitPrice).toLocaleString('ru-RU')} UZS</b>\n` +
+        `💰 Цена за штуку: <b>${Number(item.unitPrice).toLocaleString('ru-RU')} UZS</b>\n` +
+        `💵 Общая сумма: <b>${totalPrice.toLocaleString('ru-RU')} UZS</b>\n` +
         `📅 Дата и время продажи: <b>${now}</b>\n` +
         `👤 Логин продавшего: <b>${sale.user?.username ?? ''}</b>\n`;
       
@@ -73,30 +62,12 @@ async function sendTelegramNotification(saleId: number, items: any[], userId: nu
         text += `📊 Остаток проданного товара: <b>${product.stock}</b>\n`;
       }
       
-      const url = `https://api.telegram.org/bot${token}/sendMessage`;
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          chat_id: chatId, 
-          text, 
-          parse_mode: 'HTML', 
-          disable_web_page_preview: true 
-        }),
-        dispatcher,  // Используем dispatcher с поддержкой прокси
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[telegram] Ошибка отправки сообщения:', response.status, response.statusText, errorText);
-      } else {
-        console.log('[telegram] Сообщение успешно отправлено для товара:', product.name);
-      }
+      await sendTelegramMessage(text);
     }
     
-    console.log('[telegram] Уведомления отправлены для продажи:', saleId);
+    console.log('[telegram] Уведомления о продаже отправлены:', saleId);
   } catch (error) {
-    console.error('[telegram] Ошибка отправки уведомлений:', error);
+    console.error('[telegram] Ошибка отправки уведомлений о продаже:', error);
   }
 }
 
