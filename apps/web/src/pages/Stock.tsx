@@ -3,7 +3,15 @@ import { apiFetch } from '../lib/api';
 import { useAutoRefresh } from '../hooks/useAutoRefresh';
 import { toast } from 'sonner';
 
-type Product = { id: number; name: string; sku: string; stock?: number };
+type Product = {
+  id: number;
+  name: string;
+  sku: string;
+  stock?: number | null;
+  packSize?: number | null;
+  price?: number | string | null;
+  isComposite?: boolean;
+};
 type Movement = { id: number; product: Product; type: string; quantity: number; unitPrice?: number|null; unitCost?: number|null; note?: string|null; createdAt: string };
 
 export default function StockPage() {
@@ -34,26 +42,43 @@ export default function StockPage() {
   const [historyTotal, setHistoryTotal] = useState(0);
   const [historyLimit] = useState(20);
 
+  function warnMissingStock(product: Product | null) {
+    if (product && (product.stock === undefined || product.stock === null)) {
+      toast.error('Остаток товара не найден');
+    }
+  }
+
+  const formatProductPrice = (value: Product['price']) => {
+    if (value === undefined || value === null || value === '') return null;
+    const numeric = typeof value === 'number' ? value : Number(value);
+    if (Number.isNaN(numeric)) return null;
+    return formatUZS(numeric);
+  };
+
   async function findProductIn() {
     const res = await apiFetch<{ items: Product[]; total: number; page: number; limit: number }>(`/api/products?search=${encodeURIComponent(queryIn)}&limit=100`);
     // Фильтруем результаты на фронтенде для нечувствительного к регистру поиска
-    const filtered = res.items.filter(p => 
-      p.name.toLowerCase().includes(queryIn.toLowerCase()) || 
+    const filtered = res.items.filter(p =>
+      p.name.toLowerCase().includes(queryIn.toLowerCase()) ||
       p.sku.toLowerCase().includes(queryIn.toLowerCase())
     );
     setSuggestionsIn(filtered);
-    setProductIn(filtered[0] || null);
+    const next = filtered[0] || null;
+    setProductIn(next);
+    warnMissingStock(next);
   }
 
   async function findProductOut() {
     const res = await apiFetch<{ items: Product[]; total: number; page: number; limit: number }>(`/api/products?search=${encodeURIComponent(queryOut)}&limit=100`);
     // Фильтруем результаты на фронтенде для нечувствительного к регистру поиска
     const filtered = res.items.filter(p => 
-      p.name.toLowerCase().includes(queryOut.toLowerCase()) || 
+      p.name.toLowerCase().includes(queryOut.toLowerCase()) ||
       p.sku.toLowerCase().includes(queryOut.toLowerCase())
     );
     setSuggestionsOut(filtered);
-    setProductOut(filtered[0] || null);
+    const next = filtered[0] || null;
+    setProductOut(next);
+    warnMissingStock(next);
   }
 
   async function doIn() {
@@ -147,10 +172,30 @@ export default function StockPage() {
             />
             <button className="btn" onClick={findProductIn}>Найти</button>
           </div>
+          {productIn && (
+            <div className="mt-2 rounded border border-neutral-700 bg-[#1a1f29] p-3 text-sm text-neutral-200">
+              <div className="font-medium">{productIn.name}</div>
+              <div className="mt-1 grid gap-1 text-neutral-300">
+                <div><span className="text-neutral-500">SKU:</span> {productIn.sku || '—'}</div>
+                <div><span className="text-neutral-500">Остаток:</span> {typeof productIn.stock === 'number' ? productIn.stock : '—'}</div>
+                <div><span className="text-neutral-500">Коэф. упаковки:</span> {productIn.packSize ?? '—'}</div>
+                <div><span className="text-neutral-500">Текущая цена:</span> {formatProductPrice(productIn.price) ?? '—'}</div>
+              </div>
+            </div>
+          )}
           {suggestionsIn.length > 0 && (
             <div className="absolute z-50 mt-1 w-full max-h-60 overflow-auto bg-[#1E222B] border border-neutral-700 rounded shadow-lg">
               {suggestionsIn.map((p) => (
-                <div key={p.id} className="px-3 py-2 hover:bg-[#2a2f3a] cursor-pointer" onClick={() => { setProductIn(p); setQueryIn(`${p.name}`); setSuggestionsIn([]); }}>
+                <div
+                  key={p.id}
+                  className="px-3 py-2 hover:bg-[#2a2f3a] cursor-pointer"
+                  onClick={() => {
+                    setProductIn(p);
+                    warnMissingStock(p);
+                    setQueryIn(`${p.name}`);
+                    setSuggestionsIn([]);
+                  }}
+                >
                   {p.name}
                 </div>
               ))}
@@ -201,10 +246,30 @@ export default function StockPage() {
             />
             <button className="btn" onClick={findProductOut}>Найти</button>
           </div>
+          {productOut && (
+            <div className="mt-2 rounded border border-neutral-700 bg-[#1a1f29] p-3 text-sm text-neutral-200">
+              <div className="font-medium">{productOut.name}</div>
+              <div className="mt-1 grid gap-1 text-neutral-300">
+                <div><span className="text-neutral-500">SKU:</span> {productOut.sku || '—'}</div>
+                <div><span className="text-neutral-500">Остаток:</span> {typeof productOut.stock === 'number' ? productOut.stock : '—'}</div>
+                <div><span className="text-neutral-500">Коэф. упаковки:</span> {productOut.packSize ?? '—'}</div>
+                <div><span className="text-neutral-500">Текущая цена:</span> {formatProductPrice(productOut.price) ?? '—'}</div>
+              </div>
+            </div>
+          )}
           {suggestionsOut.length > 0 && (
             <div className="absolute z-50 mt-1 w-full max-h-60 overflow-auto bg-[#1E222B] border border-neutral-700 rounded shadow-lg">
               {suggestionsOut.map((p) => (
-                <div key={p.id} className="px-3 py-2 hover:bg-[#2a2f3a] cursor-pointer" onClick={() => { setProductOut(p); setQueryOut(`${p.name}`); setSuggestionsOut([]); }}>
+                <div
+                  key={p.id}
+                  className="px-3 py-2 hover:bg-[#2a2f3a] cursor-pointer"
+                  onClick={() => {
+                    setProductOut(p);
+                    warnMissingStock(p);
+                    setQueryOut(`${p.name}`);
+                    setSuggestionsOut([]);
+                  }}
+                >
                   {p.name}
                 </div>
               ))}
