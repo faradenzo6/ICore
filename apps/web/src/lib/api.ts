@@ -16,12 +16,14 @@ export async function apiFetch<T>(url: string, options?: RequestInit): Promise<T
     let message = 'Request failed';
     const contentType = res.headers.get('content-type') || '';
     if (contentType.includes('application/json')) {
-      try {
-        const data = await res.json();
-        message = (data && (data.message || data.error)) || message;
-      } catch {}
+      const data = await res.json().catch(() => null);
+      if (data && typeof data === 'object') {
+        const maybeMessage = (data as { message?: string; error?: string });
+        message = maybeMessage.message || maybeMessage.error || message;
+      }
     } else {
-      try { message = await res.text(); } catch {}
+      const text = await res.text().catch(() => '');
+      if (text) message = text;
     }
     throw new Error(message);
   }

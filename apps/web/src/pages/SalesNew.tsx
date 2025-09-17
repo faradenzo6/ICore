@@ -17,7 +17,7 @@ export default function SalesNew() {
   async function addByName(name: string) {
     const res = await apiFetch<{ items: Product[]; total: number; page: number; limit: number }>(`/api/products?search=${encodeURIComponent(name)}&limit=5`);
     const product = res.items.find(p => p.name.toLowerCase().includes(name.toLowerCase())) || res.items[0];
-    if (!product) { alert('Товар не найден'); return; }
+    if (!product) { toast.error('Товар не найден'); return; }
     setCart((prev) => {
       const idx = prev.findIndex((i) => i.product.id === product.id);
       if (idx >= 0) {
@@ -70,7 +70,7 @@ export default function SalesNew() {
     <div className="p-6 space-y-4">
       <h1 className="text-2xl font-semibold">Новая продажа</h1>
       <div className="flex gap-3 items-start">
-        <div className="relative w-full max-w-xl" onBlur={(e) => {
+        <div className="relative w-full max-w-xl" onBlur={() => {
           // Закрыть подсказки при клике вне (задержка чтобы клик по элементу успел обработаться)
           setTimeout(() => setSuggestions([]), 100);
         }}>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../lib/api';
 import { useAutoRefresh } from '../hooks/useAutoRefresh';
+import { toast } from 'sonner';
 
 type Product = { id: number; name: string; sku: string; stock?: number };
 type Movement = { id: number; product: Product; type: string; quantity: number; unitPrice?: number|null; unitCost?: number|null; note?: string|null; createdAt: string };
@@ -57,31 +58,35 @@ export default function StockPage() {
 
   async function doIn() {
     if (!productIn) return;
-    await apiFetch('/api/stock/in', { method: 'POST', body: JSON.stringify({ productId: productIn.id, quantity: qtyIn, unitPrice: priceIn || undefined, salePrice: salePrice || undefined }) });
-    alert('Поступление добавлено');
-    // Мгновенно обновляем данные
-    loadMovements();
-    loadAllProducts();
-    // Очищаем форму
-    setQueryIn('');
-    setProductIn(null);
-    setSuggestionsIn([]);
-    setPriceIn('');
-    setSalePrice('');
+    try {
+      await apiFetch('/api/stock/in', { method: 'POST', body: JSON.stringify({ productId: productIn.id, quantity: qtyIn, unitPrice: priceIn || undefined, salePrice: salePrice || undefined }) });
+      toast.success('Поступление добавлено');
+      await loadMovements();
+      await loadAllProducts();
+      setQueryIn('');
+      setProductIn(null);
+      setSuggestionsIn([]);
+      setPriceIn('');
+      setSalePrice('');
+    } catch (e) {
+      toast.error((e as Error).message || 'Не удалось добавить поступление');
+    }
   }
 
   async function doOut() {
     if (!productOut) return;
-    await apiFetch('/api/stock/out', { method: 'POST', body: JSON.stringify({ productId: productOut.id, quantity: qtyOut, note: noteOut || undefined }) });
-    alert('Списание выполнено');
-    // Мгновенно обновляем данные
-    loadMovements();
-    loadAllProducts();
-    // Очищаем форму
-    setQueryOut('');
-    setProductOut(null);
-    setSuggestionsOut([]);
-    setNoteOut('');
+    try {
+      await apiFetch('/api/stock/out', { method: 'POST', body: JSON.stringify({ productId: productOut.id, quantity: qtyOut, note: noteOut || undefined }) });
+      toast.success('Списание выполнено');
+      await loadMovements();
+      await loadAllProducts();
+      setQueryOut('');
+      setProductOut(null);
+      setSuggestionsOut([]);
+      setNoteOut('');
+    } catch (e) {
+      toast.error((e as Error).message || 'Не удалось выполнить списание');
+    }
   }
 
   async function loadMovements() {
