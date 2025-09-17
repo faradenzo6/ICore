@@ -1,11 +1,21 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiFetch, getMe, User } from '../lib/api';
 import { toast } from 'sonner';
 import { useAutoRefresh } from '../hooks/useAutoRefresh';
 import ConfirmDialog from '../components/ConfirmDialog';
 
 type Category = { id: number; name: string };
-type Product = { id: number; name: string; sku: string; categoryId: number|null; price: number; costPrice?: number; stock: number; isActive: boolean; category?: { id: number; name: string } };
+type Product = {
+  id: number;
+  name: string;
+  sku: string;
+  categoryId: number | null;
+  price: number | null;
+  costPrice: number | null;
+  stock: number | null;
+  isActive: boolean;
+  category?: { id: number; name: string };
+};
 
 export default function Products() {
   const [me, setMe] = useState<User | null>(null);
@@ -18,41 +28,52 @@ export default function Products() {
   const [limit, setLimit] = useState(20);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     getMe().then(setMe).catch(() => {});
     apiFetch<Category[]>('/api/categories').then(setCategories);
   }, []);
 
-  const loadProducts = async () => {
-    const qs = new URLSearchParams();
-    if (search) qs.set('search', search);
-    if (category) qs.set('category', String(category));
-    if (active !== 'all') qs.set('active', String(active === 'true'));
-    qs.set('page', String(page));
-    qs.set('limit', String(limit));
-    const res = await apiFetch<{ items: Product[]; total: number; page: number; limit: number } | null>('/api/products?' + qs.toString());
-    
-    // Если есть поиск, фильтруем результаты на фронтенде для нечувствительного к регистру поиска
-    if (res && search) {
-      const filtered = res.items.filter(p => 
-        p.name.toLowerCase().includes(search.toLowerCase()) || 
-        p.sku.toLowerCase().includes(search.toLowerCase())
-      );
-      setItems({ ...res, items: filtered });
-    } else {
-      setItems(res);
+  const loadProducts = useCallback(async () => {
+    setLoading(true);
+    try {
+      const qs = new URLSearchParams();
+      if (search) qs.set('search', search);
+      if (category) qs.set('category', String(category));
+      if (active !== 'all') qs.set('active', String(active === 'true'));
+      qs.set('page', String(page));
+      qs.set('limit', String(limit));
+      const res = await apiFetch<{ items: Product[]; total: number; page: number; limit: number } | null>('/api/products?' + qs.toString());
+
+      if (res && search) {
+        const filtered = res.items.filter(p =>
+          p.name.toLowerCase().includes(search.toLowerCase()) ||
+          p.sku.toLowerCase().includes(search.toLowerCase())
+        );
+        setItems({ ...res, items: filtered });
+      } else {
+        setItems(res);
+      }
+    } catch (error) {
+      console.error('Не удалось загрузить товары', error);
+      setItems(null);
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [active, category, limit, page, search]);
 
   useEffect(() => {
-    loadProducts();
-  }, [search, category, page, active, limit]);
+    void loadProducts();
+  }, [loadProducts]);
 
   // Автоматическое обновление каждые 30 секунд
-  useAutoRefresh(loadProducts, 30000);
+  useAutoRefresh(() => {
+    void loadProducts();
+  }, 30000);
 
   const canCreate = me?.role === 'ADMIN';
+  const columnCount = canCreate ? 8 : 7;
 
   async function handleDeleteProduct() {
     if (!productToDelete) return;
@@ -97,7 +118,7 @@ export default function Products() {
         </select>
         {/* Кнопки справа после селектов */}
         <div className="flex gap-2 ml-auto">
-          {canCreate && <CreateProduct onCreated={() => { setPage(1); loadProducts(); }} categories={categories} />}
+          {canCreate && <CreateProduct onCreated={() => { setPage(1); void loadProducts(); }} categories={categories} />}
           {canCreate && <ManageCategories />}
         </div>
       </div>
@@ -109,25 +130,41 @@ export default function Products() {
               <th className="text-left p-2">#</th>
               <th className="text-left p-2">Название</th>
               <th className="text-left p-2">Категория</th>
+              <th className="text-left p-2">Цена продажи</th>
+              <th className="text-left p-2">Себестоимость</th>
+              <th className="text-left p-2">Остаток</th>
               <th className="text-left p-2">Статус</th>
               {canCreate && <th className="text-left p-2">Действия</th>}
             </tr>
           </thead>
           <tbody>
+            {loading && (
+              <tr>
+                <td className="p-4 text-center text-neutral-400" colSpan={columnCount}>Загрузка...</td>
+              </tr>
+            )}
             {items?.items.map((p) => (
               <tr key={p.id} className="border-t border-neutral-800">
                 <td className="p-2">{p.id}</td>
                 <td className="p-2">{p.name}</td>
                 <td className="p-2">{p.category?.name || ''}</td>
+                <td className="p-2">{p.price != null ? formatUZS(p.price) : '—'}</td>
+                <td className="p-2">{p.costPrice != null ? formatUZS(p.costPrice) : '—'}</td>
+                <td className="p-2">{p.stock != null ? p.stock : '—'}</td>
                 <td className="p-2">{p.isActive ? 'Активен' : 'Скрыт'}</td>
                 {canCreate && (
                   <td className="p-2 space-x-2">
-                    <EditProduct product={p} categories={categories} onUpdated={() => { setPage(1); loadProducts(); }} />
+                    <EditProduct product={p} categories={categories} onUpdated={() => { setPage(1); void loadProducts(); }} />
                     <button className="btn" onClick={() => setProductToDelete(p)}>Удалить</button>
                   </td>
                 )}
               </tr>
             ))}
+            {items && items.items.length === 0 && !loading && (
+              <tr>
+                <td className="p-4 text-center text-neutral-400" colSpan={columnCount}>Нет товаров</td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -390,6 +427,11 @@ function ManageCategories() {
       />
     </>
   );
+}
+
+
+function formatUZS(value: number) {
+  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'UZS', maximumFractionDigits: 0 }).format(value);
 }
 
 
