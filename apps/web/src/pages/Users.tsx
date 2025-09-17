@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../lib/api';
+import { toast } from 'sonner';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 type User = { id: number; username?: string; role: 'ADMIN'|'STAFF_MANAGER'|'STAFF'; createdAt: string };
 
@@ -8,6 +10,11 @@ export default function UsersPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<User['role']>('STAFF');
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [resetUser, setResetUser] = useState<User | null>(null);
+  const [resetPasswordValue, setResetPasswordValue] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
 
   async function load() {
     const data = await apiFetch<User[]>('/api/users');
@@ -16,28 +23,69 @@ export default function UsersPage() {
 
   useEffect(() => { load(); }, []);
 
+  const deleteUserLabel = userToDelete ? userToDelete.username || `ID ${userToDelete.id}` : '';
+
   async function createUser() {
-    await apiFetch('/api/users', { method: 'POST', body: JSON.stringify({ username, password, role }) });
-    setUsername(''); setPassword(''); setRole('STAFF');
-    await load();
+    try {
+      await apiFetch('/api/users', { method: 'POST', body: JSON.stringify({ username, password, role }) });
+      setUsername(''); setPassword(''); setRole('STAFF');
+      await load();
+      toast.success('Пользователь создан');
+    } catch (e) {
+      toast.error((e as Error).message || 'Не удалось создать пользователя');
+    }
   }
 
   async function updateRole(id: number, role: User['role']) {
-    await apiFetch(`/api/users/${id}`, { method: 'PUT', body: JSON.stringify({ role }) });
-    await load();
+    try {
+      await apiFetch(`/api/users/${id}`, { method: 'PUT', body: JSON.stringify({ role }) });
+      await load();
+      toast.success('Роль обновлена');
+    } catch (e) {
+      toast.error((e as Error).message || 'Не удалось обновить роль');
+    }
   }
 
-  async function resetPassword(id: number) {
-    const p = prompt('Новый пароль:');
-    if (!p) return;
-    await apiFetch(`/api/users/${id}`, { method: 'PUT', body: JSON.stringify({ password: p }) });
-    alert('Пароль обновлён');
+  function startResetPassword(user: User) {
+    setResetUser(user);
+    setResetPasswordValue('');
   }
 
-  async function remove(id: number) {
-    if (!confirm('Удалить пользователя?')) return;
-    await apiFetch(`/api/users/${id}`, { method: 'DELETE' });
-    await load();
+  function closeResetModal() {
+    if (resetLoading) return;
+    setResetUser(null);
+    setResetPasswordValue('');
+  }
+
+  async function submitResetPassword() {
+    if (!resetUser) return;
+    if (!resetPasswordValue.trim()) return;
+    setResetLoading(true);
+    try {
+      await apiFetch(`/api/users/${resetUser.id}`, { method: 'PUT', body: JSON.stringify({ password: resetPasswordValue }) });
+      toast.success('Пароль обновлён');
+      setResetUser(null);
+      setResetPasswordValue('');
+    } catch (e) {
+      toast.error((e as Error).message || 'Не удалось обновить пароль');
+    } finally {
+      setResetLoading(false);
+    }
+  }
+
+  async function handleDeleteUser() {
+    if (!userToDelete) return;
+    setDeleteLoading(true);
+    try {
+      await apiFetch(`/api/users/${userToDelete.id}`, { method: 'DELETE' });
+      toast.success('Пользователь удалён');
+      await load();
+    } catch (e) {
+      toast.error((e as Error).message || 'Не удалось удалить пользователя');
+    } finally {
+      setDeleteLoading(false);
+      setUserToDelete(null);
+    }
   }
 
   return (
@@ -73,14 +121,70 @@ export default function UsersPage() {
                   </select>
                 </td>
                 <td className="p-2 flex gap-2">
-                  <button className="btn" onClick={() => resetPassword(u.id)}>Сброс пароля</button>
-                  <button className="btn" onClick={() => remove(u.id)}>Удалить</button>
+                  <button className="btn" onClick={() => startResetPassword(u)}>Сброс пароля</button>
+                  <button className="btn" onClick={() => setUserToDelete(u)}>Удалить</button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      <ConfirmDialog
+        open={Boolean(userToDelete)}
+        title="Удалить пользователя"
+        description={userToDelete ? `Удалить пользователя «${deleteUserLabel}»?` : undefined}
+        confirmText="Удалить"
+        onConfirm={handleDeleteUser}
+        onClose={() => { if (!deleteLoading) setUserToDelete(null); }}
+        loading={deleteLoading}
+        destructive
+      />
+
+      {resetUser && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
+          onClick={closeResetModal}
+        >
+          <div
+            className="card w-full max-w-sm p-4"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <div className="font-semibold">Сброс пароля</div>
+              <button className="text-neutral-300" onClick={closeResetModal}>✕</button>
+            </div>
+            <div className="space-y-3">
+              <div className="text-sm text-neutral-300">
+                Новый пароль для пользователя «{resetUser.username || `ID ${resetUser.id}`}».
+              </div>
+              <input
+                type="password"
+                value={resetPasswordValue}
+                onChange={(e) => setResetPasswordValue(e.target.value)}
+                placeholder="Новый пароль"
+                className="w-full rounded border border-neutral-700 bg-[#11161f] p-2"
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  className="px-3 py-2 rounded border border-neutral-700 hover:bg-[#242834]"
+                  onClick={closeResetModal}
+                  disabled={resetLoading}
+                >
+                  Отмена
+                </button>
+                <button
+                  className="btn"
+                  onClick={submitResetPassword}
+                  disabled={resetLoading || !resetPasswordValue.trim()}
+                >
+                  {resetLoading ? '...' : 'Сохранить'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

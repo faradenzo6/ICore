@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { apiFetch, getMe, User } from '../lib/api';
 import { toast } from 'sonner';
 import { useAutoRefresh } from '../hooks/useAutoRefresh';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 type Category = { id: number; name: string };
 type Product = { id: number; name: string; sku: string; categoryId: number|null; price: number; costPrice?: number; stock: number; isActive: boolean; category?: { id: number; name: string } };
@@ -15,6 +16,8 @@ export default function Products() {
   const [page, setPage] = useState(1);
   const [active, setActive] = useState('all');
   const [limit, setLimit] = useState(20);
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
     getMe().then(setMe).catch(() => {});
@@ -50,6 +53,25 @@ export default function Products() {
   useAutoRefresh(loadProducts, 30000);
 
   const canCreate = me?.role === 'ADMIN';
+
+  async function handleDeleteProduct() {
+    if (!productToDelete) return;
+    setDeleteLoading(true);
+    const target = productToDelete;
+    setItems((prev) => prev ? { ...prev, items: prev.items.filter((x) => x.id !== target.id), total: Math.max(0, prev.total - 1) } : prev);
+    try {
+      await apiFetch(`/api/products/${target.id}`, { method: 'DELETE' });
+      toast.success('Удалено');
+    } catch (e) {
+      const msg = (e as Error).message || 'Ошибка удаления';
+      toast.error(msg);
+      setPage(1);
+      await loadProducts();
+    } finally {
+      setDeleteLoading(false);
+      setProductToDelete(null);
+    }
+  }
 
   return (
     <div className="p-6 space-y-4">
@@ -101,21 +123,7 @@ export default function Products() {
                 {canCreate && (
                   <td className="p-2 space-x-2">
                     <EditProduct product={p} categories={categories} onUpdated={() => { setPage(1); loadProducts(); }} />
-                    <button className="btn" onClick={async () => {
-                      if (!confirm('Удалить товар?')) return;
-                      try {
-                        // оптимистичное удаление
-                        setItems((prev) => prev ? { ...prev, items: prev.items.filter((x) => x.id !== p.id), total: Math.max(0, prev.total - 1) } : prev);
-                        await apiFetch(`/api/products/${p.id}`, { method: 'DELETE' });
-                        toast.success('Удалено');
-                      } catch (e) {
-                        const msg = (e as Error).message || 'Ошибка удаления';
-                        toast.error(msg);
-                        // откат: перезагрузка страницы данных
-                        setPage(1);
-                        loadProducts();
-                      }
-                    }}>Удалить</button>
+                    <button className="btn" onClick={() => setProductToDelete(p)}>Удалить</button>
                   </td>
                 )}
               </tr>
@@ -135,12 +143,19 @@ export default function Products() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={Boolean(productToDelete)}
+        title="Удалить товар"
+        description={productToDelete ? `Вы уверены, что хотите удалить товар «${productToDelete.name}»?` : undefined}
+        confirmText="Удалить"
+        onConfirm={handleDeleteProduct}
+        onClose={() => { if (!deleteLoading) setProductToDelete(null); }}
+        loading={deleteLoading}
+        destructive
+      />
     </div>
   );
-}
-
-function formatUZS(value: number) {
-  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'UZS', maximumFractionDigits: 0 }).format(value);
 }
 
 function CreateProduct({ categories, onCreated }: { categories: Category[]; onCreated: () => void }) {
@@ -179,7 +194,7 @@ function CreateProduct({ categories, onCreated }: { categories: Category[]; onCr
       setName(''); setCategoryId(''); setPrice(''); setSausagesPerUnit(''); setBunId(''); setSausageId('');
       onCreated();
     } catch (e) {
-      alert('Ошибка: ' + (e as Error).message);
+      toast.error((e as Error).message || 'Не удалось создать товар');
     } finally {
       setLoading(false);
     }
@@ -258,7 +273,7 @@ function EditProduct({ product, categories, onUpdated }: { product: Product; cat
       setOpen(false);
       onUpdated();
     } catch (e) {
-      alert('Ошибка: ' + (e as Error).message);
+      toast.error((e as Error).message || 'Не удалось обновить товар');
     } finally {
       setLoading(false);
     }
@@ -301,6 +316,8 @@ function ManageCategories() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [items, setItems] = useState<{ id: number; name: string }[]>([]);
+  const [categoryToDelete, setCategoryToDelete] = useState<{ id: number; name: string } | null>(null);
+  const [categoryDeleting, setCategoryDeleting] = useState(false);
 
   async function load() {
     const data = await apiFetch<{ id: number; name: string }[]>('/api/categories');
@@ -309,15 +326,29 @@ function ManageCategories() {
 
   async function add() {
     if (!name.trim()) return;
-    await apiFetch('/api/categories', { method: 'POST', body: JSON.stringify({ name }) });
-    setName('');
-    await load();
+    try {
+      await apiFetch('/api/categories', { method: 'POST', body: JSON.stringify({ name }) });
+      setName('');
+      await load();
+      toast.success('Категория добавлена');
+    } catch (e) {
+      toast.error((e as Error).message || 'Не удалось добавить категорию');
+    }
   }
 
-  async function remove(id: number) {
-    if (!confirm('Удалить категорию?')) return;
-    await apiFetch(`/api/categories/${id}`, { method: 'DELETE' });
-    await load();
+  async function handleDeleteCategory() {
+    if (!categoryToDelete) return;
+    setCategoryDeleting(true);
+    try {
+      await apiFetch(`/api/categories/${categoryToDelete.id}`, { method: 'DELETE' });
+      toast.success('Категория удалена');
+      await load();
+    } catch (e) {
+      toast.error((e as Error).message || 'Не удалось удалить категорию');
+    } finally {
+      setCategoryDeleting(false);
+      setCategoryToDelete(null);
+    }
   }
 
   return (
@@ -339,7 +370,7 @@ function ManageCategories() {
                 {items.map((c) => (
                   <div key={c.id} className="flex items-center justify-between px-3 py-2 border-b border-neutral-800">
                     <div>{c.name}</div>
-                    <button className="btn" onClick={() => remove(c.id)}>Удалить</button>
+                    <button className="btn" onClick={() => setCategoryToDelete(c)}>Удалить</button>
                   </div>
                 ))}
               </div>
@@ -347,6 +378,16 @@ function ManageCategories() {
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={Boolean(categoryToDelete)}
+        title="Удалить категорию"
+        description={categoryToDelete ? `Удалить категорию «${categoryToDelete.name}»?` : undefined}
+        confirmText="Удалить"
+        onConfirm={handleDeleteCategory}
+        onClose={() => { if (!categoryDeleting) setCategoryToDelete(null); }}
+        loading={categoryDeleting}
+        destructive
+      />
     </>
   );
 }
