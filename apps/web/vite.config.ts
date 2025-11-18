@@ -9,10 +9,12 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:5050',
         changeOrigin: true,
+        cookieDomainRewrite: 'localhost',
       },
       '/static': {
         target: 'http://localhost:5050',
         changeOrigin: true,
+        cookieDomainRewrite: 'localhost',
       },
     },
   },

@@ -1,157 +1,337 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import ScannerDialog from '../components/ScannerDialog';
+import React, { useEffect, useState, useMemo } from 'react';
 import { apiFetch } from '../lib/api';
 import { toast } from 'sonner';
 
-type Product = { id: number; name: string; sku: string; price: number };
-type CartItem = { product: Product; quantity: number; unitPrice: number };
+type Phone = {
+  id: number;
+  imei: string;
+  model: string;
+  purchasePrice: number | string;
+  condition: 'new' | 'used';
+  salePrice?: number | string | null;
+  status: 'in_stock' | 'sold';
+};
 
 export default function SalesNew() {
-  const [query, setQuery] = useState('');
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [scannerOpen, setScannerOpen] = useState(false);
-  const [discount, setDiscount] = useState(0);
-  const [payment, setPayment] = useState<'cash' | 'card' | ''>('');
-  const [suggestions, setSuggestions] = useState<Product[]>([]);
+  const [selectedPhone, setSelectedPhone] = useState<Phone | null>(null);
+  const [phones, setPhones] = useState<Phone[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [salePrice, setSalePrice] = useState<number | ''>('');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'credit' | ''>('');
+  const [customerFirstName, setCustomerFirstName] = useState('');
+  const [customerLastName, setCustomerLastName] = useState('');
+  const [initialPayment, setInitialPayment] = useState<number | ''>('');
+  const [creditMonths, setCreditMonths] = useState<number>(6);
+  const [loading, setLoading] = useState(false);
 
-  async function addByName(name: string) {
-    const res = await apiFetch<{ items: Product[]; total: number; page: number; limit: number }>(`/api/products?search=${encodeURIComponent(name)}&limit=5`);
-    const product = res.items.find(p => p.name.toLowerCase().includes(name.toLowerCase())) || res.items[0];
-    if (!product) { toast.error('Товар не найден'); return; }
-    setCart((prev) => {
-      const idx = prev.findIndex((i) => i.product.id === product.id);
-      if (idx >= 0) {
-        const copy = [...prev];
-        copy[idx] = { ...copy[idx], quantity: copy[idx].quantity + 1 };
-        return copy;
-      }
-      return [...prev, { product, quantity: 1, unitPrice: product.price }];
-    });
-  }
-
-  const total = useMemo(() => cart.reduce((s, it) => s + it.quantity * it.unitPrice, 0), [cart]);
-
-  async function pay() {
-    if (!cart.length) return;
-    if (!payment) { toast.error('Выберите способ оплаты'); return; }
-    const items = cart.map((i) => ({ productId: i.product.id, quantity: i.quantity, unitPrice: i.unitPrice }));
+  async function loadPhones() {
     try {
-      await apiFetch<{ id: number }>('/api/sales', {
-        method: 'POST',
-        body: JSON.stringify({ items, discount: discount || undefined, paymentMethod: payment }),
-      });
-      // Продажа фиксируется, чек не скачиваем
-      setCart([]); setDiscount(0); setPayment('');
-      toast.success('Продажа оформлена');
-    } catch (e) {
-      toast.error((e as Error).message || 'Не удалось оформить продажу');
+      const res = await apiFetch<{ items: Phone[] }>('/api/phones?status=in_stock&limit=1000');
+      setPhones(res.items);
+    } catch (error) {
+      console.error('Не удалось загрузить телефоны', error);
+      setPhones([]);
     }
   }
 
-  function inc(id: number) { setCart((c) => c.map((it) => it.product.id === id ? { ...it, quantity: it.quantity + 1 } : it)); }
-  function dec(id: number) { setCart((c) => c.map((it) => it.product.id === id ? { ...it, quantity: Math.max(1, it.quantity - 1) } : it)); }
-  function del(id: number) { setCart((c) => c.filter((it) => it.product.id !== id)); }
-
   useEffect(() => {
-    const t = setTimeout(async () => {
-      if (!query.trim()) { setSuggestions([]); return; }
-      const res = await apiFetch<{ items: Product[]; total: number; page: number; limit: number }>(`/api/products?search=${encodeURIComponent(query)}&limit=100`);
-      // Фильтруем на фронтенде для нечувствительного к регистру поиска
-      const filtered = res.items.filter(p =>
-        p.name.toLowerCase().includes(query.toLowerCase()) ||
-        p.sku.toLowerCase().includes(query.toLowerCase())
-      );
-      setSuggestions(filtered);
-    }, 200);
-    return () => clearTimeout(t);
-  }, [query]);
+    loadPhones();
+  }, []);
+
+  const filteredPhones = useMemo(() => {
+    if (!searchQuery.trim()) return phones;
+    const query = searchQuery.toLowerCase();
+    return phones.filter(
+      (p) =>
+        p.imei.toLowerCase().includes(query) ||
+        p.model.toLowerCase().includes(query)
+    );
+  }, [phones, searchQuery]);
+
+  function selectPhone(phone: Phone) {
+    setSelectedPhone(phone);
+    setSalePrice(phone.salePrice ? Number(phone.salePrice) : '');
+    setPaymentMethod('');
+    setCustomerFirstName('');
+    setCustomerLastName('');
+    setInitialPayment('');
+    setCreditMonths(6);
+  }
+
+  function clearSelection() {
+    setSelectedPhone(null);
+    setSalePrice('');
+    setPaymentMethod('');
+    setCustomerFirstName('');
+    setCustomerLastName('');
+    setInitialPayment('');
+    setCreditMonths(6);
+  }
+
+  const monthlyPayment = useMemo(() => {
+    if (paymentMethod !== 'credit' || !salePrice || !initialPayment || !creditMonths) return null;
+    const remaining = Number(salePrice) - Number(initialPayment);
+    return remaining / creditMonths;
+  }, [paymentMethod, salePrice, initialPayment, creditMonths]);
+
+  async function completeSale() {
+    if (!selectedPhone) {
+      toast.error('Выберите телефон');
+      return;
+    }
+    if (!salePrice) {
+      toast.error('Укажите цену продажи');
+      return;
+    }
+    if (!paymentMethod) {
+      toast.error('Выберите способ оплаты');
+      return;
+    }
+    if (paymentMethod === 'credit') {
+      if (!initialPayment || Number(initialPayment) >= Number(salePrice)) {
+        toast.error('Первоначальный платёж должен быть меньше цены продажи');
+        return;
+      }
+      if (!customerFirstName || !customerLastName) {
+        toast.error('Укажите имя и фамилию покупателя для кредита');
+        return;
+      }
+      if (!creditMonths || creditMonths < 1) {
+        toast.error('Укажите период кредитования');
+        return;
+      }
+    }
+
+    setLoading(true);
+    try {
+      await apiFetch('/api/sales/phone', {
+        method: 'POST',
+        body: JSON.stringify({
+          phoneId: selectedPhone.id,
+          salePrice: Number(salePrice),
+          paymentMethod,
+          customerFirstName: customerFirstName || undefined,
+          customerLastName: customerLastName || undefined,
+          initialPayment: initialPayment ? Number(initialPayment) : undefined,
+          creditMonths: paymentMethod === 'credit' ? creditMonths : undefined,
+        }),
+      });
+      toast.success('Продажа оформлена');
+      clearSelection();
+      await loadPhones();
+    } catch (e: any) {
+      toast.error(e.message || 'Не удалось оформить продажу');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <div className="p-6 space-y-4">
       <h1 className="text-2xl font-semibold">Новая продажа</h1>
-      <div className="flex gap-3 items-start">
-        <div className="relative w-full max-w-xl" onBlur={() => {
-          // Закрыть подсказки при клике вне (задержка чтобы клик по элементу успел обработаться)
-          setTimeout(() => setSuggestions([]), 100);
-        }}>
-          <input value={query} onFocus={async () => {
-            // При фокусе показываем все товары
-            const res = await apiFetch<{ items: Product[]; total: number; page: number; limit: number }>(`/api/products?limit=100`);
-            setSuggestions(res.items);
-          }} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { addByName(query); setQuery(''); setSuggestions([]); } }} placeholder="Поиск товара" className="p-2 rounded bg-[#11161f] border border-neutral-700 w-full" />
-          {suggestions.length > 0 && (
-            <div className="absolute z-10 mt-1 w-full max-h-60 overflow-auto bg-[#1E222B] border border-neutral-700 rounded shadow-lg">
-              {suggestions.map((p) => (
-                <div key={p.id} className="px-3 py-2 hover:bg-[#2a2f3a] cursor-pointer" onClick={() => { addByName(p.name); setQuery(''); setSuggestions([]); }}>
-                  {p.name}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Левая колонка: выбор телефона */}
+        <div className="space-y-4">
+          <div className="card p-4">
+            <h2 className="font-medium mb-3">Выбор телефона</h2>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Поиск по IMEI или модели"
+              className="w-full p-2 rounded bg-[#11161f] border border-neutral-700 mb-3"
+            />
+            <div className="overflow-auto max-h-96 border border-neutral-800 rounded">
+              <table className="min-w-full text-sm">
+                <thead className="bg-[#121822] text-neutral-300 sticky top-0 z-10">
+                  <tr>
+                    <th className="text-left p-2">IMEI</th>
+                    <th className="text-left p-2">Модель</th>
+                    <th className="text-left p-2">Состояние</th>
+                    <th className="text-left p-2">Цена покупки</th>
+                    <th className="text-left p-2"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredPhones.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="p-4 text-center text-neutral-500">
+                        {searchQuery ? 'Телефоны не найдены' : 'Нет телефонов в наличии'}
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredPhones.map((phone) => (
+                      <tr
+                        key={phone.id}
+                        className={`border-t border-neutral-800 cursor-pointer hover:bg-[#1a1f29] ${
+                          selectedPhone?.id === phone.id ? 'bg-[#1a1f29]' : ''
+                        }`}
+                        onClick={() => selectPhone(phone)}
+                      >
+                        <td className="p-2">{phone.imei}</td>
+                        <td className="p-2">{phone.model}</td>
+                        <td className="p-2">{phone.condition === 'new' ? 'Новый' : 'Б.у.'}</td>
+                        <td className="p-2">{formatUZS(Number(phone.purchasePrice))}</td>
+                        <td className="p-2">
+                          {selectedPhone?.id === phone.id && <span className="text-green-500">✓</span>}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        {/* Правая колонка: форма продажи */}
+        <div className="space-y-4">
+          {selectedPhone ? (
+            <div className="card p-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="font-medium">Информация о телефоне</h2>
+                <button
+                  onClick={clearSelection}
+                  className="px-3 py-1 rounded border border-neutral-700 hover:bg-[#242834] text-sm"
+                >
+                  Отменить
+                </button>
+              </div>
+
+              <div className="space-y-2 text-sm">
+                <div>
+                  <span className="text-neutral-400">IMEI:</span> <span className="ml-2">{selectedPhone.imei}</span>
                 </div>
-              ))}
+                <div>
+                  <span className="text-neutral-400">Модель:</span> <span className="ml-2">{selectedPhone.model}</span>
+                </div>
+                <div>
+                  <span className="text-neutral-400">Состояние:</span>{' '}
+                  <span className="ml-2">{selectedPhone.condition === 'new' ? 'Новый' : 'Б.у.'}</span>
+                </div>
+                <div>
+                  <span className="text-neutral-400">Цена покупки:</span>{' '}
+                  <span className="ml-2">{formatUZS(Number(selectedPhone.purchasePrice))}</span>
+                </div>
+                {selectedPhone.salePrice && (
+                  <div>
+                    <span className="text-neutral-400">Предложенная цена продажи:</span>{' '}
+                    <span className="ml-2">{formatUZS(Number(selectedPhone.salePrice))}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-neutral-800 pt-4 space-y-3">
+                <div>
+                  <label className="block text-sm text-neutral-400 mb-1">Цена продажи *</label>
+                  <input
+                    type="number"
+                    value={salePrice}
+                    onChange={(e) => setSalePrice(e.target.value ? Number(e.target.value) : '')}
+                    placeholder="Укажите цену продажи"
+                    className="w-full p-2 rounded bg-[#11161f] border border-neutral-700"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm text-neutral-400 mb-1">Способ оплаты *</label>
+                  <select
+                    value={paymentMethod}
+                    onChange={(e) => {
+                      setPaymentMethod(e.target.value as 'cash' | 'card' | 'credit' | '');
+                      if (e.target.value !== 'credit') {
+                        setCustomerFirstName('');
+                        setCustomerLastName('');
+                        setInitialPayment('');
+                      }
+                    }}
+                    className="w-full p-2 rounded bg-[#11161f] border border-neutral-700"
+                  >
+                    <option value="">Выберите способ оплаты</option>
+                    <option value="cash">Наличные</option>
+                    <option value="card">Карта</option>
+                    <option value="credit">Кредит (насия)</option>
+                  </select>
+                </div>
+
+                {paymentMethod === 'credit' && (
+                  <>
+                    <div>
+                      <label className="block text-sm text-neutral-400 mb-1">Имя покупателя *</label>
+                      <input
+                        type="text"
+                        value={customerFirstName}
+                        onChange={(e) => setCustomerFirstName(e.target.value)}
+                        placeholder="Имя"
+                        className="w-full p-2 rounded bg-[#11161f] border border-neutral-700"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-neutral-400 mb-1">Фамилия покупателя *</label>
+                      <input
+                        type="text"
+                        value={customerLastName}
+                        onChange={(e) => setCustomerLastName(e.target.value)}
+                        placeholder="Фамилия"
+                        className="w-full p-2 rounded bg-[#11161f] border border-neutral-700"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-neutral-400 mb-1">Первоначальный платёж *</label>
+                      <input
+                        type="number"
+                        value={initialPayment}
+                        onChange={(e) => setInitialPayment(e.target.value ? Number(e.target.value) : '')}
+                        placeholder="Сумма первоначального платежа"
+                        className="w-full p-2 rounded bg-[#11161f] border border-neutral-700"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-neutral-400 mb-1">Период кредитования (месяцев) *</label>
+                      <select
+                        value={creditMonths}
+                        onChange={(e) => setCreditMonths(Number(e.target.value))}
+                        className="w-full p-2 rounded bg-[#11161f] border border-neutral-700"
+                      >
+                        <option value={3}>3 месяца</option>
+                        <option value={6}>6 месяцев</option>
+                        <option value={9}>9 месяцев</option>
+                        <option value={12}>12 месяцев</option>
+                      </select>
+                    </div>
+                    {monthlyPayment !== null && (
+                      <div className="p-3 rounded bg-[#1a1f29] border border-neutral-700">
+                        <div className="text-sm text-neutral-400">Ежемесячный платёж ({creditMonths} месяцев):</div>
+                        <div className="text-lg font-semibold">{formatUZS(monthlyPayment)}</div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {(paymentMethod === 'cash' || paymentMethod === 'card') && (
+                  <div className="p-3 rounded bg-[#1a1f29] border border-neutral-700">
+                    <div className="text-sm text-neutral-400">Итого к оплате:</div>
+                    <div className="text-lg font-semibold">{salePrice ? formatUZS(Number(salePrice)) : '—'}</div>
+                  </div>
+                )}
+
+                <button className="btn w-full" onClick={completeSale} disabled={loading}>
+                  {loading ? 'Оформление...' : 'Оформить продажу'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="card p-4">
+              <div className="text-center text-neutral-500">Выберите телефон для продажи</div>
             </div>
           )}
         </div>
       </div>
-
-      <div className="card p-0 overflow-hidden">
-        <table className="min-w-full text-sm">
-          <thead className="text-neutral-400">
-            <tr>
-              <th className="text-left p-2">Товар</th>
-              <th className="text-left p-2">Цена</th>
-              <th className="text-left p-2">Кол-во</th>
-              <th className="text-left p-2">Сумма</th>
-              <th className="text-left p-2"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {cart.map((i) => (
-              <tr key={i.product.id} className="border-t border-neutral-800">
-                <td className="p-2">{i.product.name}</td>
-                <td className="p-2">{formatUZS(i.unitPrice)}</td>
-                <td className="p-2 flex items-center gap-2">
-                  <button className="btn" onClick={() => dec(i.product.id)}>-</button>
-                  <div>{i.quantity}</div>
-                  <button className="btn" onClick={() => inc(i.product.id)}>+</button>
-                </td>
-                <td className="p-2">{formatUZS(i.unitPrice * i.quantity)}</td>
-                <td className="p-2 text-right"><button className="px-3 py-2 rounded border border-neutral-700 hover:bg-[#242834]" onClick={() => del(i.product.id)}>Удалить</button></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-
-      <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-        <div className="flex items-center gap-2">
-          <label>Скидка</label>
-          <input type="number" value={discount} onChange={(e) => setDiscount(Number(e.target.value))} className="p-2 rounded bg-[#11161f] border border-neutral-700 w-32" />
-        </div>
-        <div className="flex items-center gap-2">
-          <label>Оплата</label>
-          <select value={payment} onChange={(e) => setPayment(e.target.value as '' | 'cash' | 'card')} className="p-2 rounded bg-[#11161f] border border-neutral-700">
-            <option value="">Не выбрано</option>
-            <option value="cash">Наличные</option>
-            <option value="card">Карта</option>
-          </select>
-        </div>
-        <div className="text-xl">Итого: {formatUZS(Math.max(0, total - discount))}</div>
-        <div className="flex gap-2 ml-auto">
-          <button className="px-3 py-2 rounded border border-neutral-700 hover:bg-[#242834]" onClick={() => setScannerOpen(true)}>Сканировать штрих-код</button>
-          <button className="px-3 py-2 rounded border border-neutral-700 hover:bg-[#242834]" onClick={() => setCart([])} disabled={!cart.length}>Очистить</button>
-          <button className="btn" onClick={pay} disabled={!cart.length}>Оплатить</button>
-        </div>
-      </div>
-
-      <ScannerDialog open={scannerOpen} onClose={() => setScannerOpen(false)} onResult={(code) => { addByName(code); setScannerOpen(false); }} />
     </div>
   );
 }
 
 function formatUZS(value: number) {
-  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'UZS', maximumFractionDigits: 0 }).format(value);
+  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(value);
 }
-
-//
-
-
-

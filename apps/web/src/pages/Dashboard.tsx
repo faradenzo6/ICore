@@ -64,7 +64,7 @@ export default function Dashboard() {
 }
 
 function formatUZS(value: number) {
-  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'UZS', maximumFractionDigits: 0 }).format(value);
+  return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(value);
 }
 
 

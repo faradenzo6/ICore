@@ -18,6 +18,8 @@ model User {
   updatedAt    DateTime @updatedAt
   sales        Sale[]
   movements    StockMovement[]
+  phoneMovements PhoneMovement[]
+  creditPayments CreditPayment[]
 }
 
 model Category {
@@ -76,11 +78,19 @@ model Sale {
   user          User       @relation(fields: [userId], references: [id])
   total         Decimal
   discount      Decimal?
-  paymentMethod String?
+  paymentMethod String?    // 'cash', 'card', 'credit'
+  customerFirstName String?
+  customerLastName String?
+  initialPayment Decimal?  // первоначальный платёж для кредита
+  monthlyPayment Decimal?  // ежемесячный платёж для кредита
+  creditMonths  Int?       // период кредитования в месяцах
   createdAt     DateTime   @default(now())
   items         SaleItem[]
+  phoneSales    PhoneSale[]
+  creditPayments CreditPayment[]
 
   @@index([createdAt])
+  @@index([paymentMethod])
 }
 
 model SaleItem {
@@ -92,6 +102,65 @@ model SaleItem {
   quantity   Int
   unitPrice  Decimal
   unitCost   Decimal?
+}
+
+model Phone {
+  id          Int       @id @default(autoincrement())
+  imei        String    @unique
+  model       String
+  purchasePrice Decimal  // цена покупки (приход)
+  condition   String    // 'new' или 'used'
+  salePrice   Decimal?  // цена продажи (может быть установлена позже)
+  status      String    @default("in_stock") // 'in_stock', 'sold'
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  movements   PhoneMovement[]
+  sales       PhoneSale[]
+
+  @@index([imei])
+  @@index([status])
+}
+
+model PhoneMovement {
+  id            Int       @id @default(autoincrement())
+  phoneId       Int
+  phone         Phone     @relation(fields: [phoneId], references: [id])
+  type          String    // 'IN' - поступление, 'SALE' - продажа
+  purchasePrice Decimal?  // цена покупки
+  salePrice     Decimal?  // цена продажи
+  note          String?
+  userId        Int
+  user          User      @relation(fields: [userId], references: [id])
+  createdAt     DateTime  @default(now())
+
+  @@index([phoneId, createdAt])
+}
+
+model PhoneSale {
+  id            Int       @id @default(autoincrement())
+  saleId        Int
+  sale          Sale      @relation(fields: [saleId], references: [id])
+  phoneId       Int
+  phone         Phone     @relation(fields: [phoneId], references: [id])
+  salePrice     Decimal
+  purchasePrice Decimal   // себестоимость на момент продажи
+  createdAt     DateTime  @default(now())
+
+  @@index([saleId])
+  @@index([phoneId])
+}
+
+model CreditPayment {
+  id            Int       @id @default(autoincrement())
+  saleId        Int
+  sale          Sale      @relation(fields: [saleId], references: [id])
+  amount        Decimal   // сумма платежа
+  note          String?   // примечание
+  userId        Int
+  user          User      @relation(fields: [userId], references: [id])
+  createdAt     DateTime  @default(now())
+
+  @@index([saleId, createdAt])
 }
 
 

@@ -17,15 +17,13 @@ import { router as salesRouter } from './modules/sales/routes';
 import { router as reportsRouter } from './modules/reports/routes';
 import { router as uploadRouter } from './modules/upload/routes';
 import { router as usersRouter } from './modules/users/routes';
+import { router as phonesRouter } from './modules/phones/routes';
+import { router as creditsRouter } from './modules/credits/routes';
 import { authGuard } from './middlewares/auth';
 import { prisma } from './lib/prisma';
 import { startScheduler } from './lib/scheduler';
 
 const app = express();
-
-app.use(helmet());
-app.use(express.json({ limit: '2mb' }));
-app.use(cookieParser());
 
 const origin = process.env.CORS_ORIGIN || 'http://localhost:5175';
 app.use(
@@ -34,6 +32,12 @@ app.use(
     credentials: true,
   })
 );
+
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
+app.use(express.json({ limit: '2mb' }));
+app.use(cookieParser());
 
 app.use(morgan('dev'));
 
@@ -57,6 +61,8 @@ app.use('/api/sales', salesRouter);
 app.use('/api/reports', reportsRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/users', usersRouter);
+app.use('/api/phones', phonesRouter);
+app.use('/api/credits', creditsRouter);
 
 // serve web build if present (works in dev/prod)
 const webDist = path.resolve(__dirname, '../../web/dist');

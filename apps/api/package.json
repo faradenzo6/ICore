@@ -13,7 +13,7 @@
     "format": "prettier -w \"src/**/*.{ts,json}\""
   },
   "dependencies": {
-    "@prisma/client": "^5.17.0",
+    "@prisma/client": "^6.19.0",
     "@types/node-fetch": "^2.6.13",
     "bcrypt": "^5.1.1",
     "cookie-parser": "^1.4.6",
@@ -44,7 +44,7 @@
     "eslint": "^9.9.1",
     "eslint-config-prettier": "^9.1.0",
     "prettier": "^3.3.3",
-    "prisma": "^5.17.0",
+    "prisma": "^6.19.0",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.5.4",

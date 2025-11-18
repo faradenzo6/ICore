@@ -11,28 +11,46 @@ export const router = Router();
 const loginLimiter = rateLimit({ windowMs: 60_000, max: 10 });
 
 router.post('/login', loginLimiter, async (req, res) => {
-  // Вход только по логину (username)
-  const schema = z.object({
-    login: z.string().min(1),
-    password: z.string().min(1),
-  });
-  const parsed = schema.safeParse(req.body);
-  if (!parsed.success) return res.status(422).json({ message: 'Некорректные данные' });
-  const { login, password } = parsed.data;
-  const normalized = login.toLowerCase();
-  const user = await prisma.user.findUnique({ where: { username: normalized } });
-  if (!user) return res.status(401).json({ message: 'Неверный логин или пароль' });
-  const ok = await bcrypt.compare(password, user.passwordHash);
-  if (!ok) return res.status(401).json({ message: 'Неверный логин или пароль' });
-  const secret = process.env.JWT_SECRET || 'supersecret';
-  const token = jwt.sign({ userId: user.id, role: user.role as any }, secret, { expiresIn: '7d' });
-  res.cookie('token', token, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: false,
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-  });
-  return res.json({ id: user.id, username: user.username, role: user.role });
+  try {
+    // Вход только по логину (username)
+    const schema = z.object({
+      login: z.string().min(1),
+      password: z.string().min(1),
+    });
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) return res.status(422).json({ message: 'Некорректные данные' });
+    const { login, password } = parsed.data;
+    const normalized = login.toLowerCase();
+    
+    const user = await prisma.user.findUnique({ where: { username: normalized } });
+    if (!user) {
+      console.log('[auth] Пользователь не найден:', normalized);
+      return res.status(401).json({ message: 'Неверный логин или пароль' });
+    }
+    
+    const ok = await bcrypt.compare(password, user.passwordHash);
+    if (!ok) {
+      console.log('[auth] Неверный пароль для пользователя:', normalized);
+      return res.status(401).json({ message: 'Неверный логин или пароль' });
+    }
+    
+    const secret = process.env.JWT_SECRET || 'supersecret';
+    const token = jwt.sign({ userId: user.id, role: user.role as any }, secret, { expiresIn: '7d' });
+    
+    res.cookie('token', token, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: false,
+      path: '/',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+    
+    console.log('[auth] Успешный вход для пользователя:', user.username, 'ID:', user.id);
+    return res.json({ id: user.id, username: user.username, role: user.role });
+  } catch (error: any) {
+    console.error('[auth] Ошибка при входе:', error);
+    return res.status(500).json({ message: error?.message || 'Внутренняя ошибка сервера' });
+  }
 });
 
 router.post('/logout', (req, res) => {

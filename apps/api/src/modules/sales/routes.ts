@@ -43,8 +43,8 @@ async function sendTelegramNotification(saleId: number, items: any[], userId: nu
       let text = `🛒 <b>ПРОДАЖА</b>\n` +
         `🛍️ Товар: <b>${product.name}</b>\n` +
         `📦 Количество: <b>${item.quantity}</b>\n` +
-        `💰 Цена за штуку: <b>${Number(item.unitPrice).toLocaleString('ru-RU')} UZS</b>\n` +
-        `💵 Общая сумма: <b>${totalPrice.toLocaleString('ru-RU')} UZS</b>\n` +
+        `💰 Цена за штуку: <b>${Number(item.unitPrice).toLocaleString('ru-RU')} USD</b>\n` +
+        `💵 Общая сумма: <b>${totalPrice.toLocaleString('ru-RU')} USD</b>\n` +
         `📅 Дата и время продажи: <b>${now}</b>\n` +
         `👤 Логин продавшего: <b>${sale.user?.username ?? ''}</b>\n`;
       
@@ -84,6 +84,16 @@ const saleSchema = z.object({
   discount: z.coerce.number().nonnegative().optional(),
   // Сделать способ оплаты обязательным
   paymentMethod: z.enum(['cash', 'card']),
+});
+
+const phoneSaleSchema = z.object({
+  phoneId: z.number().int(),
+  salePrice: z.number().nonnegative(),
+  paymentMethod: z.enum(['cash', 'card', 'credit']),
+  customerFirstName: z.string().optional(),
+  customerLastName: z.string().optional(),
+  initialPayment: z.number().nonnegative().optional(), // для кредита
+  creditMonths: z.number().int().positive().optional(), // период кредитования в месяцах
 });
 
 router.post('/', authGuard, requireRole('ADMIN', 'STAFF'), async (req, res) => {
@@ -335,10 +345,103 @@ router.get('/export.xlsx', authGuard, async (_req, res) => {
   res.end();
 });
 
+// Продажа телефона
+router.post('/phone', authGuard, requireRole('ADMIN', 'STAFF'), async (req, res) => {
+  try {
+    const parsed = phoneSaleSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(422).json({ message: 'Валидация не пройдена', issues: parsed.error.flatten() });
+    }
+    const { phoneId, salePrice, paymentMethod, customerFirstName, customerLastName, initialPayment, creditMonths } = parsed.data;
+    const userId = req.user!.userId;
+
+    const result = await prisma.$transaction(async (tx: any) => {
+      const phone = await tx.phone.findUnique({ where: { id: phoneId } });
+      if (!phone) {
+        throw Object.assign(new Error('Телефон не найден'), { status: 404 });
+      }
+      if (phone.status !== 'in_stock') {
+        throw Object.assign(new Error('Телефон уже продан'), { status: 422 });
+      }
+
+      let total = salePrice;
+      let monthlyPayment: number | null = null;
+      let months: number | null = null;
+
+      // Если кредит, рассчитываем ежемесячный платёж
+      if (paymentMethod === 'credit') {
+        if (!initialPayment || initialPayment >= salePrice) {
+          throw Object.assign(new Error('Первоначальный платёж должен быть меньше цены продажи'), { status: 422 });
+        }
+        if (!creditMonths || creditMonths < 1) {
+          throw Object.assign(new Error('Укажите период кредитования'), { status: 422 });
+        }
+        const remaining = salePrice - initialPayment;
+        monthlyPayment = remaining / creditMonths;
+        months = creditMonths;
+      }
+
+      const sale = await tx.sale.create({
+        data: {
+          userId,
+          total: salePrice,
+          paymentMethod,
+          customerFirstName: customerFirstName || null,
+          customerLastName: customerLastName || null,
+          initialPayment: initialPayment || null,
+          monthlyPayment,
+          creditMonths: months,
+        },
+      });
+
+      // Создаём запись о продаже телефона
+      await tx.phoneSale.create({
+        data: {
+          saleId: sale.id,
+          phoneId: phone.id,
+          salePrice,
+          purchasePrice: phone.purchasePrice,
+        },
+      });
+
+      // Обновляем статус телефона
+      await tx.phone.update({
+        where: { id: phoneId },
+        data: { status: 'sold' },
+      });
+
+      // Создаём запись о движении
+      await tx.phoneMovement.create({
+        data: {
+          phoneId: phone.id,
+          type: 'SALE',
+          purchasePrice: phone.purchasePrice,
+          salePrice,
+          userId,
+        },
+      });
+
+      return sale;
+    });
+
+    res.status(201).json({ id: result.id });
+  } catch (err: any) {
+    const status = err?.status && Number.isFinite(err.status) ? Number(err.status) : 500;
+    return res.status(status).json({ message: err?.message || 'Ошибка оформления продажи' });
+  }
+});
+
 router.get('/:id', authGuard, async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) return res.status(400).json({ message: 'Некорректный id' });
-  const sale = await prisma.sale.findUnique({ where: { id }, include: { items: { include: { product: true } }, user: true } });
+  const sale = await prisma.sale.findUnique({ 
+    where: { id }, 
+    include: { 
+      items: { include: { product: true } }, 
+      phoneSales: { include: { phone: true } },
+      user: true 
+    } 
+  });
   if (!sale) return res.status(404).json({ message: 'Не найдено' });
   res.json(sale);
 });

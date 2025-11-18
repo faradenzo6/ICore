@@ -68,8 +68,8 @@ export async function notifyStockIn(productId: number, quantity: number, unitPri
     let text = `📦 <b>ПОСТУПЛЕНИЕ ТОВАРА</b>\n` +
       `🛍️ Товар: <b>${product.name}</b>\n` +
       `📊 Количество: <b>${quantity}</b>\n` +
-      `💰 Цена закупки: <b>${unitPrice ? unitPrice.toLocaleString('ru-RU') + ' UZS' : 'не указана'}</b>\n` +
-      `💵 Общая стоимость: <b>${totalCost.toLocaleString('ru-RU')} UZS</b>\n` +
+      `💰 Цена закупки: <b>${unitPrice ? unitPrice.toLocaleString('ru-RU') + ' USD' : 'не указана'}</b>\n` +
+      `💵 Общая стоимость: <b>${totalCost.toLocaleString('ru-RU')} USD</b>\n` +
       `📈 Новый остаток: <b>${product.stock}</b>\n` +
       `📅 Дата поступления: <b>${now}</b>\n` +
       `👤 Кто добавил: <b>${user?.username ?? ''}</b>\n`;
@@ -228,22 +228,22 @@ export async function sendMonthlyReport() {
     for (const product of sortedProducts) {
       report += `\n🛍️ <b>${product.name}</b>\n`;
       report += `   📊 Продано: <b>${product.totalQuantity} шт.</b>\n`;
-      report += `   💰 Выручка: <b>${product.totalRevenue.toLocaleString('ru-RU')} UZS</b>\n`;
-      report += `   💸 Себестоимость: <b>${product.totalCost.toLocaleString('ru-RU')} UZS</b>\n`;
-      report += `   💵 Прибыль: <b>${product.profit.toLocaleString('ru-RU')} UZS</b>\n`;
+      report += `   💰 Выручка: <b>${product.totalRevenue.toLocaleString('ru-RU')} USD</b>\n`;
+      report += `   💸 Себестоимость: <b>${product.totalCost.toLocaleString('ru-RU')} USD</b>\n`;
+      report += `   💵 Прибыль: <b>${product.profit.toLocaleString('ru-RU')} USD</b>\n`;
     }
 
     // Сводка
     report += `\n\n📈 <b>СВОДКА:</b>\n`;
-    report += `💰 Общая выручка: <b>${totalRevenue.toLocaleString('ru-RU')} UZS</b>\n`;
-    report += `💸 Общая себестоимость: <b>${totalCost.toLocaleString('ru-RU')} UZS</b>\n`;
-    report += `💵 Чистая прибыль: <b>${totalProfit.toLocaleString('ru-RU')} UZS</b>\n`;
+    report += `💰 Общая выручка: <b>${totalRevenue.toLocaleString('ru-RU')} USD</b>\n`;
+    report += `💸 Общая себестоимость: <b>${totalCost.toLocaleString('ru-RU')} USD</b>\n`;
+    report += `💵 Чистая прибыль: <b>${totalProfit.toLocaleString('ru-RU')} USD</b>\n`;
     report += `📊 Количество продаж: <b>${totalSales}</b>\n\n`;
 
     // По способам оплаты
     report += `💳 <b>ПО СПОСОБАМ ОПЛАТЫ:</b>\n`;
-    report += `💵 Наличные: <b>${cashRevenue.toLocaleString('ru-RU')} UZS</b>\n`;
-    report += `💳 Карта: <b>${cardRevenue.toLocaleString('ru-RU')} UZS</b>\n`;
+    report += `💵 Наличные: <b>${cashRevenue.toLocaleString('ru-RU')} USD</b>\n`;
+    report += `💳 Карта: <b>${cardRevenue.toLocaleString('ru-RU')} USD</b>\n`;
 
     // Отправляем отчёт (разбиваем на части если слишком длинный)
     const maxLength = 4000; // Telegram лимит

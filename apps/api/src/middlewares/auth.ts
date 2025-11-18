@@ -14,13 +14,17 @@ declare module 'express-serve-static-core' {
 
 export function authGuard(req: Request, res: Response, next: NextFunction) {
   const token = req.cookies?.token as string | undefined;
-  if (!token) return res.status(401).json({ message: 'Не авторизован' });
+  if (!token) {
+    console.log('[auth] Cookie не найдена. Cookies:', req.cookies);
+    return res.status(401).json({ message: 'Не авторизован' });
+  }
   try {
     const secret = process.env.JWT_SECRET || 'supersecret';
     const payload = jwt.verify(token, secret) as JwtPayload;
     req.user = payload;
     return next();
   } catch (e) {
+    console.log('[auth] Ошибка верификации токена:', e);
     return res.status(401).json({ message: 'Сессия недействительна' });
   }
 }

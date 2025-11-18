@@ -1,10 +1,11 @@
 import React from 'react';
 import { useForm } from 'react-hook-form';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { apiFetch } from '../lib/api';
+import { useAuth } from '../store/auth';
 
 // Разрешаем адреса вида admin@local (без TLD)
 const schema = z.object({
@@ -15,6 +16,8 @@ type FormData = z.infer<typeof schema>;
 
 export default function Login() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { fetch } = useAuth();
   const redirectTo = React.useMemo(() => {
     const params = new URLSearchParams(location.search);
     const target = params.get('redirectTo');
@@ -27,11 +30,15 @@ export default function Login() {
   const onSubmit = async (data: FormData) => {
     setFormError(null);
     try {
-      await apiFetch('/api/auth/login', {
+      const response = await apiFetch<{ id: number; username: string; role: string }>('/api/auth/login', {
         method: 'POST',
         body: JSON.stringify(data),
       });
-      location.href = redirectTo;
+      console.log('[login] Успешный вход, ответ:', response);
+      // Обновляем состояние пользователя
+      await fetch();
+      // Перенаправляем на нужную страницу
+      navigate(redirectTo, { replace: true });
     } catch (err) {
       const message = err instanceof Error ? err.message.trim() : '';
       if (message) {

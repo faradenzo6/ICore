@@ -10,11 +10,11 @@ export default function AppLayout() {
     <div className="min-h-screen grid grid-rows-[auto,1fr]">
       <header className="border-b border-neutral-800 bg-[var(--panel)]">
         <div className="max-w-7xl mx-auto px-6 h-14 flex items-center gap-4">
-          <Link to="/dashboard" className="font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-red-600 to-red-900 text-2xl tracking-wide">ARENA</Link>
+          <Link to="/dashboard" className="font-extrabold text-white text-2xl tracking-wide">iCore</Link>
           <nav className="flex items-center gap-2 text-neutral-200 text-base">
-            {user?.role === 'ADMIN' && <Tab to="/products" active={is('/products')}>Товары</Tab>}
             <Tab to="/sales/new" active={is('/sales')}>Продажа</Tab>
             <Tab to="/stock" active={is('/stock')}>Склад</Tab>
+            <Tab to="/credits" active={is('/credits')}>Кредит</Tab>
             {user?.role === 'ADMIN' && <Tab to="/reports" active={is('/reports')}>Отчёты</Tab>}
             {user?.role === 'ADMIN' && <Tab to="/users" active={is('/users')}>Пользователи</Tab>}
           </nav>

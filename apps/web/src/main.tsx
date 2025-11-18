@@ -14,6 +14,7 @@ const Dashboard = React.lazy(() => import('./pages/Dashboard'));
 const Products = React.lazy(() => import('./pages/Products'));
 const SalesNew = React.lazy(() => import('./pages/SalesNew'));
 const Stock = React.lazy(() => import('./pages/Stock'));
+const Credits = React.lazy(() => import('./pages/Credits'));
 const Reports = React.lazy(() => import('./pages/Reports'));
 
 const qc = new QueryClient();
@@ -28,10 +29,10 @@ function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/" element={<RequireAuth><AppLayout /></RequireAuth>}>
               <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/products" element={<Products />} />
               <Route path="/sales/new" element={<RequireAuth roles={["ADMIN","STAFF"]}><SalesNew /></RequireAuth>} />
               <Route path="/stock" element={<RequireAuth roles={["ADMIN"]}><Stock /></RequireAuth>} />
-              <Route path="/reports" element={<Reports />} />
+              <Route path="/credits" element={<RequireAuth roles={["ADMIN","STAFF"]}><Credits /></RequireAuth>} />
+              <Route path="/reports" element={<RequireAuth><Reports /></RequireAuth>} />
               <Route path="/users" element={<RequireAuth roles={["ADMIN"]}><Users /></RequireAuth>} />
             </Route>
             <Route path="*" element={<Navigate to="/sales/new" replace />} />
