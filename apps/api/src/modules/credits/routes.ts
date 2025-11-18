@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
 import { authGuard, requireRole } from '../../middlewares/auth';
+import { notifyCreditPayment } from '../../lib/telegram';
 
 export const router = Router();
 
@@ -42,10 +43,10 @@ router.get('/', authGuard, async (req, res) => {
     });
 
     // Вычисляем оплаченную сумму и остаток для каждого кредита
-    const creditsWithBalance = credits.map((credit) => {
+    const creditsWithBalance = credits.map((credit: any) => {
       const totalPaid =
         Number(credit.initialPayment || 0) +
-        credit.creditPayments.reduce((sum, p) => sum + Number(p.amount), 0);
+        credit.creditPayments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
       const remaining = Number(credit.total) - totalPaid;
       const phoneSale = credit.phoneSales[0];
 
@@ -135,6 +136,11 @@ router.post('/payment', authGuard, requireRole('ADMIN', 'STAFF'), async (req, re
       return payment;
     });
 
+    // Отправляем уведомление о кредитном платеже
+    notifyCreditPayment(saleId, amount, userId, note).catch(error => {
+      console.error('[telegram] Ошибка уведомления о кредитном платеже:', error);
+    });
+
     res.status(201).json(result);
   } catch (err: any) {
     const status = err?.status && Number.isFinite(err.status) ? Number(err.status) : 500;
@@ -184,7 +190,7 @@ router.get('/:id', authGuard, async (req, res) => {
 
     const totalPaid =
       Number(sale.initialPayment || 0) +
-      sale.creditPayments.reduce((sum, p) => sum + Number(p.amount), 0);
+      sale.creditPayments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
     const remaining = Number(sale.total) - totalPaid;
     const phoneSale = sale.phoneSales[0];
 

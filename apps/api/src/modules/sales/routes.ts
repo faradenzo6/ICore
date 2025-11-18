@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../../lib/prisma';
 import { authGuard, requireRole } from '../../middlewares/auth';
 import { toCsv } from '../../utils/csv';
-import { sendTelegramMessage } from '../../lib/telegram';
+import { sendTelegramMessage, notifyPhoneSale } from '../../lib/telegram';
 
 // Функция для отправки уведомлений о продажах в Telegram
 async function sendTelegramNotification(saleId: number, items: any[], userId: number) {
@@ -19,6 +19,7 @@ async function sendTelegramNotification(saleId: number, items: any[], userId: nu
           include: {
             product: {
               include: {
+                category: true,
                 bunComponent: true,
                 sausageComponent: true
               }
@@ -40,26 +41,44 @@ async function sendTelegramNotification(saleId: number, items: any[], userId: nu
       const product = item.product;
       
       const totalPrice = Number(item.unitPrice) * item.quantity;
-      let text = `🛒 <b>ПРОДАЖА</b>\n` +
-        `🛍️ Товар: <b>${product.name}</b>\n` +
-        `📦 Количество: <b>${item.quantity}</b>\n` +
-        `💰 Цена за штуку: <b>${Number(item.unitPrice).toLocaleString('ru-RU')} USD</b>\n` +
-        `💵 Общая сумма: <b>${totalPrice.toLocaleString('ru-RU')} USD</b>\n` +
-        `📅 Дата и время продажи: <b>${now}</b>\n` +
-        `👤 Логин продавшего: <b>${sale.user?.username ?? ''}</b>\n`;
+      const unitCost = Number(item.unitCost || product.costPrice || 0);
+      const profit = totalPrice - (unitCost * item.quantity);
+      
+      let text = `🛒 <b>ПРОДАЖА ТОВАРА</b>\n\n` +
+        `🛍️ <b>Товар:</b> ${product.name}\n` +
+        `📦 <b>Количество:</b> ${item.quantity} шт.\n` +
+        `💰 <b>Цена за штуку:</b> ${Number(item.unitPrice).toLocaleString('ru-RU')} USD\n` +
+        `💵 <b>Общая сумма:</b> ${totalPrice.toLocaleString('ru-RU')} USD\n`;
+      
+      if (unitCost > 0) {
+        text += `💸 <b>Себестоимость:</b> ${(unitCost * item.quantity).toLocaleString('ru-RU')} USD\n` +
+          `💵 <b>Прибыль:</b> ${profit.toLocaleString('ru-RU')} USD\n`;
+      }
       
       if (product.isComposite) {
-        text += `📊 Остаток проданного товара: <b>—</b>\n`;
+        text += `📊 <b>Остаток товара:</b> —\n`;
         
         // Добавляем информацию об остатках компонентов для хот-догов
         if (product.bunComponent) {
-          text += `🥖 Остаток лепёшек: <b>${product.bunComponent.stock}</b>\n`;
+          text += `🥖 <b>Остаток лепёшек:</b> ${product.bunComponent.stock} шт.\n`;
         }
         if (product.sausageComponent) {
-          text += `🌭 Остаток сосисок: <b>${product.sausageComponent.stock}</b>\n`;
+          text += `🌭 <b>Остаток сосисок:</b> ${product.sausageComponent.stock} шт.\n`;
         }
       } else {
-        text += `📊 Остаток проданного товара: <b>${product.stock}</b>\n`;
+        text += `📊 <b>Остаток товара:</b> ${product.stock} шт.\n`;
+      }
+      
+      text += `💳 <b>Способ оплаты:</b> ${sale.paymentMethod === 'cash' ? 'Наличные' : sale.paymentMethod === 'card' ? 'Карта' : 'Кредит'}\n` +
+        `📅 <b>Дата:</b> ${now}\n` +
+        `👤 <b>Продавец:</b> ${sale.user?.username ?? 'неизвестно'}\n`;
+      
+      if (product.category) {
+        text += `🏷️ <b>Категория:</b> ${product.category.name}\n`;
+      }
+      
+      if (product.sku) {
+        text += `🔖 <b>SKU:</b> ${product.sku}\n`;
       }
       
       await sendTelegramMessage(text);
@@ -422,6 +441,11 @@ router.post('/phone', authGuard, requireRole('ADMIN', 'STAFF'), async (req, res)
       });
 
       return sale;
+    });
+
+    // Отправляем уведомление о продаже телефона
+    notifyPhoneSale(result.id, userId).catch(error => {
+      console.error('[telegram] Ошибка уведомления о продаже телефона:', error);
     });
 
     res.status(201).json({ id: result.id });

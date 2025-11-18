@@ -8,6 +8,7 @@ import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import path from 'path';
 import fs from 'fs';
+import https from 'https';
 
 import { router as authRouter } from './modules/auth/routes';
 import { router as productsRouter } from './modules/products/routes';
@@ -25,16 +26,18 @@ import { startScheduler } from './lib/scheduler';
 
 const app = express();
 
-const origin = process.env.CORS_ORIGIN || 'http://localhost:5175';
+const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:5175';
 app.use(
   cors({
-    origin,
-    credentials: true,
+    origin: corsOrigin === '*' ? true : corsOrigin,
+    credentials: corsOrigin !== '*',
   })
 );
 
 app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" }
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  contentSecurityPolicy: false, // Отключаем CSP для HTTP
+  strictTransportSecurity: false, // Отключаем HSTS для HTTP
 }));
 app.use(express.json({ limit: '2mb' }));
 app.use(cookieParser());
@@ -83,11 +86,32 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 });
 
 const port = Number(process.env.API_PORT || 5050);
-app.listen(port, () => {
-  console.log(`API listening on http://localhost:${port}`);
+const useHttps = process.env.USE_HTTPS === 'true';
+
+// Проверяем наличие SSL сертификатов
+const certDir = path.resolve(process.cwd(), 'certs');
+const certPath = path.join(certDir, 'cert.pem');
+const keyPath = path.join(certDir, 'key.pem');
+const hasCert = fs.existsSync(certPath) && fs.existsSync(keyPath);
+
+if (useHttps && hasCert) {
+  const options = {
+    cert: fs.readFileSync(certPath),
+    key: fs.readFileSync(keyPath),
+  };
   
-  // Запускаем планировщик задач
-  startScheduler();
-});
+  https.createServer(options, app).listen(port, '0.0.0.0', () => {
+    console.log(`API listening on https://0.0.0.0:${port}`);
+    startScheduler();
+  });
+} else {
+  app.listen(port, '0.0.0.0', () => {
+    console.log(`API listening on http://0.0.0.0:${port}`);
+    if (useHttps && !hasCert) {
+      console.warn('⚠️  HTTPS requested but certificates not found. Using HTTP.');
+    }
+    startScheduler();
+  });
+}
 
 

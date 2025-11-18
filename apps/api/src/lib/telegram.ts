@@ -4,8 +4,8 @@ import { prisma } from './prisma';
 // Функция для отправки сообщения в Telegram
 async function sendTelegramMessage(text: string) {
   try {
-    const token = process.env.TELEGRAM_BOT_TOKEN || '8475679792:AAHVGHAfx3hIoSPOPMAqcJSnkOlbHpzgJzs';
-    const chatId = process.env.TELEGRAM_CHAT_ID || '-4614810639';
+    const token = process.env.TELEGRAM_BOT_TOKEN || '8539140642:AAHoTNdn-y4I2sxswotPLNCMWlckwNPHEp8';
+    const chatId = process.env.TELEGRAM_CHAT_ID || '-1003416454746';
     const httpsProxy = process.env.HTTPS_PROXY;
     
     if (!token || !chatId) {
@@ -65,17 +65,21 @@ export async function notifyStockIn(productId: number, quantity: number, unitPri
     const now = new Date().toLocaleString('ru-RU');
     const totalCost = unitPrice ? unitPrice * quantity : 0;
     
-    let text = `📦 <b>ПОСТУПЛЕНИЕ ТОВАРА</b>\n` +
-      `🛍️ Товар: <b>${product.name}</b>\n` +
-      `📊 Количество: <b>${quantity}</b>\n` +
-      `💰 Цена закупки: <b>${unitPrice ? unitPrice.toLocaleString('ru-RU') + ' USD' : 'не указана'}</b>\n` +
-      `💵 Общая стоимость: <b>${totalCost.toLocaleString('ru-RU')} USD</b>\n` +
-      `📈 Новый остаток: <b>${product.stock}</b>\n` +
-      `📅 Дата поступления: <b>${now}</b>\n` +
-      `👤 Кто добавил: <b>${user?.username ?? ''}</b>\n`;
+    let text = `📦 <b>ПОСТУПЛЕНИЕ ТОВАРА</b>\n\n` +
+      `🛍️ <b>Товар:</b> ${product.name}\n` +
+      `📊 <b>Количество:</b> ${quantity} шт.\n` +
+      `💰 <b>Цена закупки:</b> ${unitPrice ? unitPrice.toLocaleString('ru-RU') + ' USD' : 'не указана'}\n` +
+      `💵 <b>Общая стоимость:</b> ${totalCost.toLocaleString('ru-RU')} USD\n` +
+      `📈 <b>Новый остаток:</b> ${product.stock} шт.\n` +
+      `📅 <b>Дата:</b> ${now}\n` +
+      `👤 <b>Оператор:</b> ${user?.username ?? 'неизвестно'}\n`;
 
     if (product.category) {
-      text += `🏷️ Категория: <b>${product.category.name}</b>\n`;
+      text += `🏷️ <b>Категория:</b> ${product.category.name}\n`;
+    }
+    
+    if (product.sku) {
+      text += `🔖 <b>SKU:</b> ${product.sku}\n`;
     }
 
     await sendTelegramMessage(text);
@@ -104,19 +108,23 @@ export async function notifyStockOut(productId: number, quantity: number, note: 
 
     const now = new Date().toLocaleString('ru-RU');
     
-    let text = `📤 <b>СПИСАНИЕ ТОВАРА</b>\n` +
-      `🛍️ Товар: <b>${product.name}</b>\n` +
-      `📊 Количество: <b>${quantity}</b>\n` +
-      `📈 Новый остаток: <b>${product.stock}</b>\n` +
-      `📅 Дата списания: <b>${now}</b>\n` +
-      `👤 Кто списал: <b>${user?.username ?? ''}</b>\n`;
+    let text = `📤 <b>СПИСАНИЕ ТОВАРА</b>\n\n` +
+      `🛍️ <b>Товар:</b> ${product.name}\n` +
+      `📊 <b>Количество:</b> ${quantity} шт.\n` +
+      `📈 <b>Новый остаток:</b> ${product.stock} шт.\n` +
+      `📅 <b>Дата:</b> ${now}\n` +
+      `👤 <b>Оператор:</b> ${user?.username ?? 'неизвестно'}\n`;
 
     if (note) {
-      text += `📝 Причина: <b>${note}</b>\n`;
+      text += `📝 <b>Причина:</b> ${note}\n`;
     }
 
     if (product.category) {
-      text += `🏷️ Категория: <b>${product.category.name}</b>\n`;
+      text += `🏷️ <b>Категория:</b> ${product.category.name}\n`;
+    }
+    
+    if (product.sku) {
+      text += `🔖 <b>SKU:</b> ${product.sku}\n`;
     }
 
     await sendTelegramMessage(text);
@@ -277,6 +285,125 @@ export async function sendMonthlyReport() {
     console.log('[telegram] Ежемесячный отчёт отправлен');
   } catch (error) {
     console.error('[telegram] Ошибка генерации ежемесячного отчёта:', error);
+  }
+}
+
+// Уведомление о продаже телефона
+export async function notifyPhoneSale(saleId: number, userId: number) {
+  try {
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      include: {
+        phoneSales: {
+          include: {
+            phone: true
+          }
+        },
+        user: {
+          select: { username: true }
+        }
+      }
+    });
+
+    if (!sale || !sale.phoneSales.length) {
+      console.error('[telegram] Продажа телефона не найдена:', saleId);
+      return;
+    }
+
+    const phoneSale = sale.phoneSales[0];
+    const phone = phoneSale.phone;
+    const now = new Date().toLocaleString('ru-RU');
+    const profit = Number(phoneSale.salePrice) - Number(phone.purchasePrice || 0);
+    
+    let text = `📱 <b>ПРОДАЖА ТЕЛЕФОНА</b>\n\n` +
+      `📱 <b>Модель:</b> ${phone.model}\n` +
+      `💵 <b>Цена продажи:</b> ${Number(phoneSale.salePrice).toLocaleString('ru-RU')} USD\n` +
+      `💰 <b>Цена закупки:</b> ${Number(phone.purchasePrice || 0).toLocaleString('ru-RU')} USD\n` +
+      `💵 <b>Прибыль:</b> ${profit.toLocaleString('ru-RU')} USD\n` +
+      `💳 <b>Способ оплаты:</b> ${sale.paymentMethod === 'cash' ? 'Наличные' : sale.paymentMethod === 'card' ? 'Карта' : 'Кредит'}\n`;
+
+    if (sale.customerFirstName || sale.customerLastName) {
+      text += `👤 <b>Покупатель:</b> ${[sale.customerFirstName, sale.customerLastName].filter(Boolean).join(' ')}\n`;
+    }
+
+    if (sale.paymentMethod === 'credit') {
+      text += `\n💳 <b>КРЕДИТНАЯ ПРОДАЖА</b>\n` +
+        `💵 <b>Первоначальный взнос:</b> ${Number(sale.initialPayment || 0).toLocaleString('ru-RU')} USD\n` +
+        `📅 <b>Срок кредита:</b> ${sale.creditMonths || 0} мес.\n` +
+        `💰 <b>Ежемесячный платёж:</b> ${Number(sale.monthlyPayment || 0).toLocaleString('ru-RU')} USD\n`;
+    }
+
+    text += `\n📅 <b>Дата продажи:</b> ${now}\n` +
+      `👤 <b>Продавец:</b> ${sale.user?.username ?? 'неизвестно'}\n`;
+
+    if (phone.imei) {
+      text += `🔢 <b>IMEI:</b> ${phone.imei}\n`;
+    }
+
+    await sendTelegramMessage(text);
+  } catch (error) {
+    console.error('[telegram] Ошибка уведомления о продаже телефона:', error);
+  }
+}
+
+// Уведомление о кредитном платеже
+export async function notifyCreditPayment(saleId: number, amount: number, userId: number, note?: string) {
+  try {
+    const sale = await prisma.sale.findUnique({
+      where: { id: saleId },
+      include: {
+        phoneSales: {
+          include: {
+            phone: true
+          }
+        },
+        creditPayments: true,
+        user: {
+          select: { username: true }
+        }
+      }
+    });
+
+    if (!sale) {
+      console.error('[telegram] Продажа не найдена для уведомления о платеже:', saleId);
+      return;
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { username: true }
+    });
+
+    const totalPaid = Number(sale.initialPayment || 0) +
+      sale.creditPayments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+    const remaining = Number(sale.total) - totalPaid;
+    const now = new Date().toLocaleString('ru-RU');
+
+    let text = `💳 <b>КРЕДИТНЫЙ ПЛАТЁЖ</b>\n\n` +
+      `💰 <b>Сумма платежа:</b> ${amount.toLocaleString('ru-RU')} USD\n` +
+      `💵 <b>Всего оплачено:</b> ${totalPaid.toLocaleString('ru-RU')} USD\n` +
+      `📊 <b>Остаток долга:</b> ${remaining.toLocaleString('ru-RU')} USD\n` +
+      `💵 <b>Общая сумма кредита:</b> ${Number(sale.total).toLocaleString('ru-RU')} USD\n`;
+
+    if (sale.phoneSales.length > 0) {
+      const phone = sale.phoneSales[0].phone;
+      text += `\n📱 <b>Телефон:</b> ${phone.model}\n`;
+    }
+
+    if (sale.customerFirstName || sale.customerLastName) {
+      text += `👤 <b>Покупатель:</b> ${[sale.customerFirstName, sale.customerLastName].filter(Boolean).join(' ')}\n`;
+    }
+
+    if (note) {
+      text += `📝 <b>Примечание:</b> ${note}\n`;
+    }
+
+    text += `\n📅 <b>Дата платежа:</b> ${now}\n` +
+      `👤 <b>Принял:</b> ${user?.username ?? 'неизвестно'}\n`;
+
+    await sendTelegramMessage(text);
+  } catch (error) {
+    console.error('[telegram] Ошибка уведомления о кредитном платеже:', error);
   }
 }
 
